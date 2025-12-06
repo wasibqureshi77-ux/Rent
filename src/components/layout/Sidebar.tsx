@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Users, Zap, FileText, Settings, LogOut, Sun, Moon } from 'lucide-react';
+import { Home, Users, Zap, FileText, Settings, LogOut, Shield } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
-import { cn } from '@/lib/utils'; // I need to create this utility or use clsx directly
+import { cn } from '@/lib/utils';
 
 const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
@@ -17,6 +17,10 @@ const navigation = [
 export default function Sidebar() {
     const pathname = usePathname();
     const { data: session } = useSession();
+
+    const activeNavigation = session?.user?.role === 'super_admin'
+        ? [...navigation, { name: 'Admin Users', href: '/dashboard/admin/users', icon: Shield }]
+        : navigation;
 
     return (
         <div className="flex w-64 flex-col fixed inset-y-0 z-50 glass dark:glass-dark border-r border-gray-200 dark:border-gray-800">
@@ -35,7 +39,7 @@ export default function Sidebar() {
                     <ul role="list" className="flex flex-1 flex-col gap-y-7">
                         <li>
                             <ul role="list" className="-mx-2 space-y-1">
-                                {navigation.map((item) => {
+                                {activeNavigation.map((item) => {
                                     const isActive = pathname === item.href;
                                     return (
                                         <li key={item.name}>
@@ -43,14 +47,14 @@ export default function Sidebar() {
                                                 href={item.href}
                                                 className={cn(
                                                     isActive
-                                                        ? 'bg-primary/10 text-primary'
-                                                        : 'text-gray-700 dark:text-gray-400 hover:text-primary hover:bg-gray-50 dark:hover:bg-gray-800/50',
-                                                    'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold transition-all duration-200 items-center'
+                                                        ? 'bg-primary text-white shadow-md'
+                                                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-primary',
+                                                    'group flex gap-x-3 rounded-xl p-3 text-sm leading-6 font-semibold transition-all duration-200 items-center'
                                                 )}
                                             >
                                                 <item.icon
                                                     className={cn(
-                                                        isActive ? 'text-primary' : 'text-gray-400 group-hover:text-primary',
+                                                        isActive ? 'text-white' : 'text-gray-500 dark:text-gray-400 group-hover:text-primary',
                                                         'h-5 w-5 shrink-0 transition-colors'
                                                     )}
                                                     aria-hidden="true"

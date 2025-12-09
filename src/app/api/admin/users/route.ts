@@ -36,6 +36,12 @@ export async function PATCH(req: Request) {
 
         const user = await User.findByIdAndUpdate(userId, { isApproved }, { new: true });
 
+        // Send approval notification email if user is being approved
+        if (isApproved && user) {
+            const { sendApprovalNotificationEmail } = await import('@/lib/email');
+            await sendApprovalNotificationEmail(user.email, user.name);
+        }
+
         return NextResponse.json(user);
     } catch (error) {
         return NextResponse.json({ message: 'Error updating user' }, { status: 500 });

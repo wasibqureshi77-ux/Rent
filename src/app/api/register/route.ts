@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
 import { z } from 'zod';
+import { generateVerificationToken, getVerificationTokenExpiry, sendVerificationEmail } from '@/lib/email';
 
 const registerSchema = z.object({
     name: z.string().min(2),
@@ -28,23 +29,40 @@ export async function POST(req: Request) {
         const count = await User.countDocuments();
         const isFirstUser = count === 0;
 
+        let verificationToken = null;
+        let verificationTokenExpiry = null;
+
+        // Generate verification token for non-super_admin users
+        if (!isFirstUser) {
+            verificationToken = generateVerificationToken();
+            verificationTokenExpiry = getVerificationTokenExpiry();
+
+            // Send verification email
+            await sendVerificationEmail(email, verificationToken, name);
+        }
+
         const user = await User.create({
             name,
             email,
             password: hashedPassword,
             role: isFirstUser ? 'super_admin' : 'owner',
-            isVerified: isFirstUser, // First user verification logic handled here or manually? 
-            // Spec says "Email verified". We will set isVerified to true for first user for ease.
-            // For others, we might need an email verification flow (out of scope for quick start unless asked, but I'll set false).
+            isVerified: isFirstUser,
             isApproved: isFirstUser,
+            verificationToken: isFirstUser ? undefined : verificationToken,
+            verificationTokenExpiry: isFirstUser ? undefined : verificationTokenExpiry,
             settings: {
                 currency: 'INR'
             }
         });
 
+        const message = isFirstUser
+            ? 'Super admin account created successfully. You can now login.'
+            : 'Registration successful! Please check your email to verify your account.';
+
         return NextResponse.json({
-            message: 'User created successfully',
-            userId: user._id
+            message,
+            userId: user._id,
+            requiresVerification: !isFirstUser
         }, { status: 201 });
 
     } catch (error: any) {

@@ -1,6 +1,5 @@
 import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
@@ -23,7 +22,7 @@ export const authOptions: NextAuthOptions = {
                 const user = await User.findOne({ email: credentials.email });
 
                 if (!user) {
-                    throw new Error('No user found');
+                    throw new Error('No user found with this email');
                 }
 
                 const isValid = await bcrypt.compare(credentials.password, user.password);
@@ -32,16 +31,25 @@ export const authOptions: NextAuthOptions = {
                     throw new Error('Invalid password');
                 }
 
-                if (!user.isVerified) {
-                    // For the super admin (first user), we might want to bypass this or auto-verify? 
-                    // But the spec says "Main super admin = original owner (client)".
-                    // We can assume the seed script will create the super admin as verified.
-                    // For others:
-                    throw new Error('Email not verified');
+                // Check user status
+                if (user.status === 'PENDING_EMAIL_VERIFICATION') {
+                    throw new Error('Please verify your email address. Check your inbox for the verification link.');
                 }
 
-                if (!user.isApproved && user.role !== 'super_admin') {
-                    throw new Error('Account pending approval by admin');
+                if (user.status === 'PENDING_APPROVAL') {
+                    throw new Error('Your account is awaiting admin approval. You will be notified once approved.');
+                }
+
+                if (user.status === 'REJECTED') {
+                    throw new Error('Your account has been rejected. Please contact support for more information.');
+                }
+
+                if (user.status === 'SUSPENDED') {
+                    throw new Error('Your account has been suspended. Please contact support.');
+                }
+
+                if (user.status !== 'ACTIVE') {
+                    throw new Error('Account is not active. Please contact support.');
                 }
 
                 return {
@@ -49,6 +57,7 @@ export const authOptions: NextAuthOptions = {
                     name: user.name,
                     email: user.email,
                     role: user.role,
+                    themePreference: user.themePreference,
                 };
             }
         })
@@ -58,6 +67,7 @@ export const authOptions: NextAuthOptions = {
             if (user) {
                 token.role = user.role;
                 token.id = user.id;
+                token.themePreference = user.themePreference;
             }
             return token;
         },
@@ -65,12 +75,13 @@ export const authOptions: NextAuthOptions = {
             if (session.user) {
                 session.user.role = token.role as string;
                 session.user.id = token.id as string;
+                session.user.themePreference = token.themePreference as string;
             }
             return session;
         }
     },
     pages: {
-        signIn: '/login', // Custom login page
+        signIn: '/login',
     },
     session: {
         strategy: 'jwt',

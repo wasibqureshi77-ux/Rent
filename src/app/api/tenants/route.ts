@@ -14,10 +14,27 @@ export async function GET(req: Request) {
     await connectDB();
 
     try {
-        const tenants = await Tenant.find({ ownerId: session.user.id }).sort({ createdAt: -1 });
+        const { searchParams } = new URL(req.url);
+        const propertyId = searchParams.get('propertyId');
+
+        const query: any = session.user.role === 'SUPER_ADMIN'
+            ? {}
+            : { ownerId: session.user.id };
+
+        if (propertyId) {
+            query.propertyId = propertyId;
+        }
+
+        const tenants = await Tenant.find(query)
+            .populate('propertyId', 'name')
+            .sort({ createdAt: -1 });
+
         return NextResponse.json(tenants);
     } catch (error) {
-        return NextResponse.json({ message: 'Error fetching tenants' }, { status: 500 });
+        console.error('Error fetching tenants:', error);
+        return NextResponse.json({
+            message: 'Error fetching tenants'
+        }, { status: 500 });
     }
 }
 
@@ -32,12 +49,35 @@ export async function POST(req: Request) {
 
     try {
         const body = await req.json();
+        const { propertyId, fullName, roomNumber, phoneNumber, alternatePhoneNumber, email, baseRent, startDate, meterReadingStart } = body;
+
+        // Validate required fields
+        if (!propertyId || !fullName || !roomNumber || !phoneNumber || !baseRent) {
+            return NextResponse.json({
+                message: 'Missing required fields'
+            }, { status: 400 });
+        }
+
         const tenant = await Tenant.create({
-            ...body,
-            ownerId: session.user.id
+            ownerId: session.user.id,
+            propertyId,
+            fullName,
+            roomNumber,
+            phoneNumber,
+            alternatePhoneNumber,
+            email,
+            baseRent,
+            startDate: startDate || new Date(),
+            isActive: true,
+            outstandingBalance: 0,
+            meterReadingStart: meterReadingStart || 0
         });
+
         return NextResponse.json(tenant, { status: 201 });
     } catch (error: any) {
-        return NextResponse.json({ message: error.message || 'Error creating tenant' }, { status: 500 });
+        console.error('Error creating tenant:', error);
+        return NextResponse.json({
+            message: error.message || 'Error creating tenant'
+        }, { status: 500 });
     }
 }

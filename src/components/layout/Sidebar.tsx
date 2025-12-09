@@ -2,14 +2,16 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Users, Zap, FileText, Settings, LogOut, Shield } from 'lucide-react';
+import { Home, Users, Zap, FileText, Settings, LogOut, Shield, Building2, FilePlus } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
 import { cn } from '@/lib/utils';
+import ThemeToggle from '@/components/ui/ThemeToggle';
 
 const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
+    { name: 'Properties', href: '/dashboard/properties', icon: Building2 },
     { name: 'Tenants', href: '/dashboard/tenants', icon: Users },
-    { name: 'Meter Readings', href: '/dashboard/readings', icon: Zap },
+    { name: 'Generate Bill', href: '/dashboard/bills/generate', icon: FilePlus },
     { name: 'Bills', href: '/dashboard/bills', icon: FileText },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
@@ -18,13 +20,13 @@ export default function Sidebar() {
     const pathname = usePathname();
     const { data: session } = useSession();
 
-    const activeNavigation = session?.user?.role === 'super_admin'
+    const activeNavigation = session?.user?.role === 'SUPER_ADMIN'
         ? [...navigation, { name: 'Admin Users', href: '/dashboard/admin/users', icon: Shield }]
         : navigation;
 
     return (
-        <div className="flex w-64 flex-col fixed inset-y-0 z-50 glass dark:glass-dark border-r border-gray-200 dark:border-gray-800">
-            <div className="flex h-16 shrink-0 items-center px-6 border-b border-gray-200/50 dark:border-gray-700/50">
+        <div className="flex w-64 flex-col fixed inset-y-0 z-50 bg-white/70 dark:bg-transparent backdrop-blur-md border-r border-gray-200 dark:border-gray-800">
+            <div className="flex h-16 shrink-0 items-center justify-between px-6 border-b border-gray-200/50 dark:border-gray-700/50">
                 <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-orange-400 flex items-center justify-center text-white font-bold text-xl shadow-lg">
                         P
@@ -33,6 +35,7 @@ export default function Sidebar() {
                         PG Manage
                     </span>
                 </div>
+                <ThemeToggle />
             </div>
             <div className="flex flex-1 flex-col gap-y-7 overflow-y-auto px-6 py-4">
                 <nav className="flex flex-1 flex-col">

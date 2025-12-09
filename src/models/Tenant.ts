@@ -1,16 +1,73 @@
 import mongoose from 'mongoose';
 
+const IdProofSchema = new mongoose.Schema({
+    type: { type: String, required: true },
+    fileUrl: { type: String, required: true },
+    fileName: { type: String, required: true },
+    documentNumber: { type: String },
+    uploadedAt: { type: Date, default: Date.now }
+}, { _id: false });
+
 const TenantSchema = new mongoose.Schema({
-    name: { type: String, required: true },
+    ownerId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+        index: true
+    },
+    propertyId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Property',
+        required: true,
+        index: true
+    },
+    fullName: {
+        type: String,
+        required: true
+    },
+    roomNumber: {
+        type: String,
+        required: true
+    },
+    phoneNumber: {
+        type: String,
+        required: true
+    },
+    alternatePhoneNumber: { type: String },
     email: { type: String },
-    phone: { type: String, required: true },
-    idProof: { type: String }, // URL or path
-    roomNo: { type: String, required: true },
-    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    isActive: { type: Boolean, default: true },
-    joinedDate: { type: Date, default: Date.now },
-    rentAmount: { type: Number, required: true }, // Base rent
-    securityDeposit: { type: Number, default: 0 },
+    baseRent: {
+        type: Number,
+        required: true
+    },
+    idProofs: [IdProofSchema],
+    startDate: {
+        type: Date,
+        required: true,
+        default: Date.now
+    },
+    endDate: { type: Date },
+    isActive: {
+        type: Boolean,
+        default: true
+    },
+    outstandingBalance: {
+        type: Number,
+        default: 0
+    },
+    meterReadingStart: {
+        type: Number,
+        default: 0
+    },
 }, { timestamps: true });
 
-export default mongoose.models.Tenant || mongoose.model('Tenant', TenantSchema);
+// Compound indexes for efficient queries
+TenantSchema.index({ ownerId: 1, propertyId: 1, isActive: 1 });
+TenantSchema.index({ ownerId: 1, roomNumber: 1 });
+
+// Delete cached model to ensure schema updates are applied
+if (mongoose.models.Tenant) {
+    delete mongoose.models.Tenant;
+}
+
+export default mongoose.model('Tenant', TenantSchema);
+

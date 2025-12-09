@@ -66,15 +66,16 @@ export default function AdminUsersPage() {
                                 <th className="px-6 py-4">Name</th>
                                 <th className="px-6 py-4">Email</th>
                                 <th className="px-6 py-4">Joined</th>
+                                <th className="px-6 py-4">Verified</th>
                                 <th className="px-6 py-4">Status</th>
                                 <th className="px-6 py-4">Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={5} className="text-center py-6">Loading...</td></tr>
+                                <tr><td colSpan={6} className="text-center py-6">Loading...</td></tr>
                             ) : users.length === 0 ? (
-                                <tr><td colSpan={5} className="text-center py-6 text-gray-500">No other users found.</td></tr>
+                                <tr><td colSpan={6} className="text-center py-6 text-gray-500">No other users found.</td></tr>
                             ) : (
                                 users.map((user) => (
                                     <tr key={user._id} className="bg-white dark:bg-card hover:bg-gray-50 dark:hover:bg-zinc-900/50 border-b border-gray-100 dark:border-gray-800 last:border-0 transition-colors">
@@ -88,6 +89,14 @@ export default function AdminUsersPage() {
                                             {new Date(user.createdAt).toLocaleDateString()}
                                         </td>
                                         <td className="px-6 py-4">
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${user.isVerified
+                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                                    : 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300'
+                                                }`}>
+                                                {user.isVerified ? 'Verified' : 'Pending'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4">
                                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${user.isApproved ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
                                                 }`}>
                                                 {user.isApproved ? 'Approved' : 'Pending'}
@@ -96,11 +105,12 @@ export default function AdminUsersPage() {
                                         <td className="px-6 py-4">
                                             <button
                                                 onClick={() => toggleApproval(user._id, user.isApproved)}
-                                                className={`p-2 rounded-full transition-colors ${user.isApproved
-                                                        ? 'bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40'
-                                                        : 'bg-green-50 text-green-600 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40'
+                                                disabled={!user.isVerified}
+                                                className={`p-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${user.isApproved
+                                                    ? 'bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40'
+                                                    : 'bg-green-50 text-green-600 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40'
                                                     }`}
-                                                title={user.isApproved ? "Revoke Access" : "Approve Access"}
+                                                title={!user.isVerified ? 'User must verify email first' : (user.isApproved ? "Revoke Access" : "Approve Access")}
                                             >
                                                 {user.isApproved ? <X className="h-4 w-4" /> : <Check className="h-4 w-4" />}
                                             </button>

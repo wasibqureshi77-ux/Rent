@@ -6,11 +6,12 @@ import { Plus, Search, Edit2, Trash, User } from 'lucide-react';
 
 interface Tenant {
     _id: string;
-    name: string;
-    roomNo: string;
-    phone: string;
-    rentAmount: number;
+    fullName: string;
+    roomNumber: string;
+    phoneNumber: string;
+    baseRent: number;
     isActive: boolean;
+    propertyId?: any;
 }
 
 export default function TenantsPage() {
@@ -32,9 +33,28 @@ export default function TenantsPage() {
     }, []);
 
     const filteredTenants = tenants.filter(t =>
-        t.name.toLowerCase().includes(search.toLowerCase()) ||
-        t.roomNo.toLowerCase().includes(search.toLowerCase())
+        (t.fullName?.toLowerCase() || '').includes(search.toLowerCase()) ||
+        (t.roomNumber?.toLowerCase() || '').includes(search.toLowerCase())
     );
+
+    const handleDelete = async (id: string) => {
+        if (!confirm('Are you sure you want to delete this tenant?')) return;
+
+        try {
+            const res = await fetch(`/api/tenants/${id}`, {
+                method: 'DELETE',
+            });
+
+            if (res.ok) {
+                setTenants(prev => prev.filter(t => t._id !== id));
+            } else {
+                alert('Failed to delete tenant');
+            }
+        } catch (error) {
+            console.error('Error deleting tenant:', error);
+            alert('Error deleting tenant');
+        }
+    };
 
     return (
         <div className="space-y-6">
@@ -90,29 +110,34 @@ export default function TenantsPage() {
                                     {tenant.isActive ? 'Active' : 'Inactive'}
                                 </span>
                                 <div className="flex gap-2">
-                                    <button className="text-gray-400 hover:text-primary transition-colors">
+                                    <Link href={`/dashboard/tenants/${tenant._id}/edit`} className="text-gray-400 hover:text-primary transition-colors">
                                         <Edit2 className="h-4 w-4" />
+                                    </Link>
+                                    <button
+                                        onClick={() => handleDelete(tenant._id)}
+                                        className="text-gray-400 hover:text-red-600 transition-colors"
+                                    >
+                                        <Trash className="h-4 w-4" />
                                     </button>
-                                    {/* We can implement delete logic later */}
                                 </div>
                             </div>
                             <div className="flex items-center gap-4 mb-4">
                                 <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center text-blue-600 font-bold text-lg">
-                                    {tenant.name.charAt(0)}
+                                    {tenant.fullName?.charAt(0) || 'T'}
                                 </div>
                                 <div>
-                                    <h3 className="font-semibold text-gray-900 dark:text-white">{tenant.name}</h3>
-                                    <p className="text-sm text-gray-500">Room {tenant.roomNo}</p>
+                                    <h3 className="font-semibold text-gray-900 dark:text-white">{tenant.fullName || 'Unknown'}</h3>
+                                    <p className="text-sm text-gray-500">Room {tenant.roomNumber || 'N/A'}</p>
                                 </div>
                             </div>
                             <div className="mt-auto space-y-2 text-sm">
                                 <div className="flex justify-between text-gray-500">
                                     <span>Phone:</span>
-                                    <span className="font-medium text-gray-900 dark:text-gray-300">{tenant.phone}</span>
+                                    <span className="font-medium text-gray-900 dark:text-gray-300">{tenant.phoneNumber || 'N/A'}</span>
                                 </div>
                                 <div className="flex justify-between text-gray-500">
                                     <span>Rent:</span>
-                                    <span className="font-medium text-gray-900 dark:text-gray-300">₹ {tenant.rentAmount}</span>
+                                    <span className="font-medium text-gray-900 dark:text-gray-300">₹ {tenant.baseRent || 0}</span>
                                 </div>
                             </div>
                         </div>

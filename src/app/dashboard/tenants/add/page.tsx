@@ -1,51 +1,98 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-
-const tenantSchema = z.object({
-    name: z.string().min(2, 'Name is required'),
-    email: z.string().email().optional().or(z.literal('')),
-    phone: z.string().min(10, 'Valid phone number is required'),
-    roomNo: z.string().min(1, 'Room number is required'),
-    rentAmount: z.string().min(1, 'Rent amount is required').transform(val => Number(val)),
-    securityDeposit: z.string().optional().transform(val => Number(val) || 0),
-    joinedDate: z.string().optional(),
-});
-
-type TenantFormValues = z.infer<typeof tenantSchema>;
 
 export default function AddTenantPage() {
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
+    const [properties, setProperties] = useState<any[]>([]);
 
-    const {
-        register,
-        handleSubmit,
-        formState: { errors },
-    } = useForm<TenantFormValues>({
-        resolver: zodResolver(tenantSchema),
+    const [formData, setFormData] = useState({
+        propertyId: '',
+        fullName: '',
+        phoneNumber: '',
+        alternatePhoneNumber: '',
+        email: '',
+        roomNumber: '',
+        baseRent: '',
+        meterReadingStart: '',
+        startDate: new Date().toLocaleDateString('en-GB') // DD/MM/YYYY
     });
 
-    const onSubmit = async (data: TenantFormValues) => {
+    useEffect(() => {
+        fetchProperties();
+    }, []);
+
+    const fetchProperties = async () => {
+        try {
+            const res = await fetch('/api/properties');
+            if (res.ok) {
+                const data = await res.json();
+                setProperties(data);
+                if (data.length > 0) {
+                    setFormData(prev => ({ ...prev, propertyId: data[0]._id }));
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching properties:', error);
+        }
+    };
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        setFormData(prev => ({
+            ...prev,
+            [e.target.name]: e.target.value
+        }));
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
         setIsSubmitting(true);
         setError('');
 
         try {
+            // Parse DD/MM/YYYY to Date object
+            let parsedDate: Date | undefined = undefined;
+            if (formData.startDate) {
+                const parts = formData.startDate.split('/');
+                if (parts.length === 3) {
+                    const day = parseInt(parts[0], 10);
+                    const month = parseInt(parts[1], 10) - 1;
+                    const year = parseInt(parts[2], 10);
+                    parsedDate = new Date(year, month, day);
+                } else {
+                    // Fallback
+                    const fallback = new Date(formData.startDate);
+                    if (!isNaN(fallback.getTime())) parsedDate = fallback;
+                }
+            }
+
+            const payload = {
+                propertyId: formData.propertyId,
+                fullName: formData.fullName,
+                phoneNumber: formData.phoneNumber,
+                alternatePhoneNumber: formData.alternatePhoneNumber || undefined,
+                email: formData.email || undefined,
+                roomNumber: formData.roomNumber,
+                baseRent: Number(formData.baseRent),
+                meterReadingStart: Number(formData.meterReadingStart) || 0,
+                startDate: parsedDate
+            };
+
             const res = await fetch('/api/tenants', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data),
+                body: JSON.stringify(payload),
             });
 
+            const data = await res.json();
+
             if (!res.ok) {
-                throw new Error('Failed to create tenant');
+                throw new Error(data.message || 'Failed to create tenant');
             }
 
             router.push('/dashboard/tenants');
@@ -65,75 +112,191 @@ export default function AddTenantPage() {
                 <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">Add New Tenant</h1>
             </div>
 
-            <div className="bg-white dark:bg-card p-8 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <div className="bg-white dark:bg-transparent p-8 rounded-xl border border-gray-100 dark:border-none shadow-sm dark:shadow-none">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    {/* Property Selection */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Property *
+                        </label>
+                        <select
+                            name="propertyId"
+                            value={formData.propertyId}
+                            onChange={handleChange}
+                            required
+                            className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
+                        >
+                            {properties.length === 0 ? (
+                                <option value="">No properties available</option>
+                            ) : (
+                                properties.map(prop => (
+                                    <option key={prop._id} value={prop._id}>
+                                        {prop.name}
+                                    </option>
+                                ))
+                            )}
+                        </select>
+                        {properties.length === 0 && (
+                            <p className="mt-1 text-sm text-amber-600">
+                                Please create a property first before adding tenants.
+                            </p>
+                        )}
+                    </div>
+
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                        {/* Full Name */}
                         <div className="sm:col-span-2">
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Full Name</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Full Name *
+                            </label>
                             <input
-                                {...register('name')}
+                                name="fullName"
                                 type="text"
-                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
+                                value={formData.fullName}
+                                onChange={handleChange}
+                                required
+                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white placeholder:text-gray-400 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
                                 placeholder="John Doe"
                             />
-                            {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
                         </div>
 
+                        {/* Phone Number */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone Number</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Phone Number *
+                            </label>
                             <input
-                                {...register('phone')}
+                                name="phoneNumber"
                                 type="tel"
-                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
+                                value={formData.phoneNumber}
+                                onChange={handleChange}
+                                required
+                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white placeholder:text-gray-400 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
                                 placeholder="9876543210"
                             />
-                            {errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>}
                         </div>
 
+                        {/* Alternate Phone */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email (Optional)</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Alternate Phone (Optional)
+                            </label>
                             <input
-                                {...register('email')}
+                                name="alternatePhoneNumber"
+                                type="tel"
+                                value={formData.alternatePhoneNumber}
+                                onChange={handleChange}
+                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white placeholder:text-gray-400 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
+                                placeholder="9123456789"
+                            />
+                        </div>
+
+                        {/* Email */}
+                        <div className="sm:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Email (Optional)
+                            </label>
+                            <input
+                                name="email"
                                 type="email"
-                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
+                                value={formData.email}
+                                onChange={handleChange}
+                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white placeholder:text-gray-400 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
                                 placeholder="john@example.com"
                             />
-                            {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
                         </div>
 
+                        {/* Room Number */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Room Number</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Room Number *
+                            </label>
                             <input
-                                {...register('roomNo')}
+                                name="roomNumber"
                                 type="text"
-                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
+                                value={formData.roomNumber}
+                                onChange={handleChange}
+                                required
+                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white placeholder:text-gray-400 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
                                 placeholder="101"
                             />
-                            {errors.roomNo && <p className="mt-1 text-sm text-red-600">{errors.roomNo.message}</p>}
                         </div>
 
+                        {/* Monthly Rent */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Monthly Rent (₹)</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Monthly Rent (₹) *
+                            </label>
                             <input
-                                {...register('rentAmount')}
+                                name="baseRent"
                                 type="number"
-                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
+                                value={formData.baseRent}
+                                onChange={handleChange}
+                                required
+                                min="0"
+                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white placeholder:text-gray-400 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
                                 placeholder="5000"
                             />
-                            {errors.rentAmount && <p className="mt-1 text-sm text-red-600">{errors.rentAmount.message}</p>}
                         </div>
 
+                        {/* Meter Reading Start - NEW FIELD */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Security Deposit (₹)</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Meter Reading Start
+                            </label>
                             <input
-                                {...register('securityDeposit')}
+                                name="meterReadingStart"
                                 type="number"
-                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
-                                placeholder="10000"
+                                value={formData.meterReadingStart}
+                                onChange={handleChange}
+                                min="0"
+                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white placeholder:text-gray-400 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
+                                placeholder="0"
                             />
-                            {errors.securityDeposit && <p className="mt-1 text-sm text-red-600">{errors.securityDeposit.message}</p>}
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Initial electricity meter reading
+                            </p>
                         </div>
 
+                        {/* Start Date */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Start Date
+                            </label>
+                            <div className="relative">
+                                <input
+                                    name="startDate"
+                                    type="text"
+                                    placeholder="DD/MM/YYYY"
+                                    value={formData.startDate}
+                                    onChange={handleChange}
+                                    className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white px-3 py-2 pr-10 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
+                                />
+                                <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                                    <div className="relative">
+                                        <input
+                                            type="date"
+                                            className="absolute inset-0 opacity-0 w-8 h-8 cursor-pointer"
+                                            onChange={(e) => {
+                                                if (e.target.value) {
+                                                    const [year, month, day] = e.target.value.split('-');
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        startDate: `${day}/${month}/${year}`
+                                                    }));
+                                                }
+                                            }}
+                                        />
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 hover:text-gray-600">
+                                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     {error && (
@@ -145,12 +308,16 @@ export default function AddTenantPage() {
                     <div className="flex justify-end pt-4">
                         <button
                             type="submit"
-                            disabled={isSubmitting}
+                            disabled={isSubmitting || properties.length === 0}
                             className="inline-flex justify-center rounded-lg bg-primary px-8 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isSubmitting ? 'Saving...' : 'Save Tenant'}
                         </button>
                     </div>
+
+                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+                        Note: You can upload ID proofs after creating the tenant
+                    </p>
                 </form>
             </div>
         </div>

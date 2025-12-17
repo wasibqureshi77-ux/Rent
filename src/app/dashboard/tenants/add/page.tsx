@@ -13,6 +13,7 @@ export default function AddTenantPage() {
 
     const [formData, setFormData] = useState({
         propertyId: '',
+        roomId: '', // Link by ID
         fullName: '',
         phoneNumber: '',
         alternatePhoneNumber: '',
@@ -22,6 +23,9 @@ export default function AddTenantPage() {
         meterReadingStart: '',
         startDate: new Date().toLocaleDateString('en-GB') // DD/MM/YYYY
     });
+
+    const [rooms, setRooms] = useState<any[]>([]);
+    const [loadingRooms, setLoadingRooms] = useState(false);
 
     useEffect(() => {
         fetchProperties();
@@ -34,11 +38,28 @@ export default function AddTenantPage() {
                 const data = await res.json();
                 setProperties(data);
                 if (data.length > 0) {
-                    setFormData(prev => ({ ...prev, propertyId: data[0]._id }));
+                    const firstPropId = data[0]._id;
+                    setFormData(prev => ({ ...prev, propertyId: firstPropId }));
+                    fetchRooms(firstPropId);
                 }
             }
         } catch (error) {
             console.error('Error fetching properties:', error);
+        }
+    };
+
+    const fetchRooms = async (propertyId: string) => {
+        setLoadingRooms(true);
+        try {
+            const res = await fetch(`/api/rooms?propertyId=${propertyId}`);
+            if (res.ok) {
+                const data = await res.json();
+                setRooms(data);
+            }
+        } catch (error) {
+            console.error('Error fetching rooms:', error);
+        } finally {
+            setLoadingRooms(false);
         }
     };
 
@@ -73,6 +94,7 @@ export default function AddTenantPage() {
 
             const payload = {
                 propertyId: formData.propertyId,
+                roomId: formData.roomId,
                 fullName: formData.fullName,
                 phoneNumber: formData.phoneNumber,
                 alternatePhoneNumber: formData.alternatePhoneNumber || undefined,
@@ -122,7 +144,11 @@ export default function AddTenantPage() {
                         <select
                             name="propertyId"
                             value={formData.propertyId}
-                            onChange={handleChange}
+                            onChange={(e) => {
+                                handleChange(e);
+                                fetchRooms(e.target.value);
+                                setFormData(prev => ({ ...prev, roomNumber: '' })); // Reset room
+                            }}
                             required
                             className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
                         >
@@ -141,6 +167,46 @@ export default function AddTenantPage() {
                                 Please create a property first before adding tenants.
                             </p>
                         )}
+                    </div>
+
+                    {/* Room Selection */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Select Room *
+                        </label>
+                        <select
+                            name="roomId" // Changed from roomNumber to roomId
+                            value={formData.roomId}
+                            onChange={(e) => {
+                                const selectedRoomId = e.target.value;
+                                const selectedRoom = rooms.find(r => r._id === selectedRoomId);
+                                setFormData(prev => ({
+                                    ...prev,
+                                    roomId: selectedRoomId,
+                                    roomNumber: selectedRoom ? selectedRoom.roomNumber : '', // Auto-fill room number text for display/legacy
+                                    meterReadingStart: selectedRoom?.currentMeterReading ? String(selectedRoom.currentMeterReading) : '' // Auto-fill meter
+                                }));
+                            }}
+                            required
+                            disabled={!formData.propertyId || loadingRooms}
+                            className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm disabled:opacity-50"
+                        >
+                            <option value="">{loadingRooms ? 'Loading rooms...' : 'Select a Room'}</option>
+                            {rooms.length > 0 ? (
+                                rooms.map(room => (
+                                    <option
+                                        key={room._id}
+                                        value={room._id} // Value is now ID
+                                        disabled={!!room.currentTenantId}
+                                        className={room.currentTenantId ? 'text-red-400' : 'text-green-600'}
+                                    >
+                                        {room.roomNumber} (Floor {room.floorNumber}) {room.currentTenantId ? '- Occupied' : '- Vacant'}
+                                    </option>
+                                ))
+                            ) : (
+                                <option value="" disabled>No rooms found. Add rooms first.</option>
+                            )}
+                        </select>
                     </div>
 
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -206,21 +272,7 @@ export default function AddTenantPage() {
                             />
                         </div>
 
-                        {/* Room Number */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Room Number *
-                            </label>
-                            <input
-                                name="roomNumber"
-                                type="text"
-                                value={formData.roomNumber}
-                                onChange={handleChange}
-                                required
-                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white placeholder:text-gray-400 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
-                                placeholder="101"
-                            />
-                        </div>
+
 
                         {/* Monthly Rent */}
                         <div>

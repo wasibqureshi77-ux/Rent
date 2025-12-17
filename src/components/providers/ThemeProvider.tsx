@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 
 type Theme = 'light' | 'dark' | 'system';
@@ -17,17 +17,28 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const { data: session, status } = useSession();
     const [theme, setThemeState] = useState<Theme>('system');
     const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
+    const syncedUserRef = useRef<string | null>(null);
 
-    // Initialize theme from user preference or localStorage
+    // Initialize from localStorage on mount
+    useEffect(() => {
+        const stored = localStorage.getItem('theme') as Theme;
+        if (stored && ['light', 'dark', 'system'].includes(stored)) {
+            setThemeState(stored);
+        }
+    }, []);
+
+    // Sync from session only once per user session to avoid overwriting local changes
     useEffect(() => {
         if (status === 'loading') return;
 
-        if (session?.user?.themePreference) {
-            setThemeState(session.user.themePreference as Theme);
-        } else {
-            const stored = localStorage.getItem('theme') as Theme;
-            if (stored && ['light', 'dark', 'system'].includes(stored)) {
-                setThemeState(stored);
+        if (session?.user?.id) {
+            // New user session detected
+            if (session.user.id !== syncedUserRef.current) {
+                syncedUserRef.current = session.user.id;
+
+                if (session.user.themePreference) {
+                    setThemeState(session.user.themePreference as Theme);
+                }
             }
         }
     }, [session, status]);

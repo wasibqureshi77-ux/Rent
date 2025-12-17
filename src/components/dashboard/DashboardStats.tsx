@@ -1,10 +1,10 @@
 'use client';
 
-import { Users, AlertCircle, DollarSign, Activity } from 'lucide-react';
+import { Users, DollarSign, Activity, Clock } from 'lucide-react';
 
 const staticStats = [
     { name: 'Total Tenants', value: '0', icon: Users, change: 'Active', changeType: 'neutral' },
-    { name: 'Pending Bills', value: '0', icon: AlertCircle, change: 'Due now', changeType: 'neutral' },
+    { name: 'Months Completed', value: '0', icon: Clock, change: 'Total Tenancy', changeType: 'neutral' },
     { name: 'Total Revenue', value: '₹0', icon: DollarSign, change: 'This month', changeType: 'neutral' },
     { name: 'Electricity Usage', value: '0 Units', icon: Activity, change: 'This month', changeType: 'neutral' },
 ];
@@ -12,17 +12,18 @@ const staticStats = [
 interface DashboardStatsProps {
     data?: {
         activeTenants: number;
-        totalOutstandingDue: number; // Or count of pending bills? The UI says "Pending Bills" with value "3". Let's use count or money? The icon is AlertCircle. Usually count.
+        totalOutstandingDue: number;
         totalRevenue: number;
         electricityUsage: number;
         billsThisMonth: number;
+        totalOccupancyMonths?: number;
     }
 }
 
 export default function DashboardStats({ data }: DashboardStatsProps) {
     const stats = data ? [
         { name: 'Total Tenants', value: data.activeTenants.toString(), icon: Users, change: 'Active', changeType: 'neutral' },
-        { name: 'Pending Bills', value: Math.round(data.totalOutstandingDue).toLocaleString(), icon: AlertCircle, change: 'Total Outstanding', changeType: 'negative' }, // Modified to show money for now, or could count pending bills if passed
+        { name: 'Months Completed', value: (data.totalOccupancyMonths || 0).toString(), icon: Clock, change: 'Aggregate', changeType: 'positive' },
         { name: 'Total Revenue', value: `₹${data.totalRevenue.toLocaleString()}`, icon: DollarSign, change: 'Collected this month', changeType: 'positive' },
         { name: 'Electricity Usage', value: `${data.electricityUsage} Units`, icon: Activity, change: 'This month', changeType: 'neutral' },
     ] : staticStats;

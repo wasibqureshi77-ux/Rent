@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/db';
@@ -80,13 +81,8 @@ export async function POST(req: Request) {
             }, { status: 400 });
         }
 
-        // Check if bill already exists for this tenant/month/year
-        const existingBill = await MonthlyBill.findOne({ tenantId, month, year });
-        if (existingBill) {
-            return NextResponse.json({
-                message: 'Bill already exists for this tenant in this month/year'
-            }, { status: 400 });
-        }
+        // Check if bill already exists check removed to allow multiple bills
+
 
         // Fetch tenant
         const tenant = await Tenant.findOne({
@@ -133,6 +129,41 @@ export async function POST(req: Request) {
 
         const totalAmount = rentAmount + electricityAmount + waterCharge + previousDue;
 
+        // Initial Payment Logic
+        const collectedAmount = body.collectedAmount ? Number(body.collectedAmount) : 0;
+        const paymentMode = body.paymentMode || 'CASH';
+
+        const remainingDue = totalAmount - collectedAmount;
+        let status = 'PENDING';
+        if (remainingDue <= 0 && collectedAmount > 0) status = 'PAID';
+        else if (collectedAmount > 0) status = 'PARTIAL';
+
+        const paymentHistory = collectedAmount > 0 ? [{
+            paidOn: new Date(),
+            amount: collectedAmount,
+            mode: paymentMode,
+            note: 'Initial payment at bill generation'
+        }] : [];
+
+        // UPDATE TENANT & ROOM STATE
+        // 1. Update Tenant's start meter reading for next cycle and balance
+        await Tenant.findByIdAndUpdate(tenantId, {
+            $set: {
+                meterReadingStart: endUnits, // Next month starts where this one ended
+                outstandingBalance: remainingDue
+            }
+        });
+
+        // 2. Update Room's persistent meter reading so newly added tenants or edits pick it up
+        if (tenant.roomId) {
+            // Use dynamic import or just rely on mongoose if model is compiled, 
+            // but best to just use the Mongoose model registry to avoid circular dependency issues if any.
+            // or just direct update since we have connection
+            await mongoose.model('Room').findByIdAndUpdate(tenant.roomId, {
+                currentMeterReading: endUnits
+            });
+        }
+
         // Create bill
         const bill = await MonthlyBill.create({
             ownerId: session.user.id,
@@ -154,11 +185,11 @@ export async function POST(req: Request) {
                 totalAmount
             },
             payments: {
-                amountPaid: 0,
-                remainingDue: totalAmount,
-                paymentHistory: []
+                amountPaid: collectedAmount,
+                remainingDue: remainingDue,
+                paymentHistory: paymentHistory
             },
-            status: 'PENDING'
+            status: status
         });
 
         // Populate tenant and property info

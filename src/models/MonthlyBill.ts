@@ -70,8 +70,8 @@ const MonthlyBillSchema = new mongoose.Schema({
     notes: { type: String },
 }, { timestamps: true });
 
-// Unique constraint: one bill per tenant per month/year
-MonthlyBillSchema.index({ tenantId: 1, month: 1, year: 1 }, { unique: true });
+// Unique constraint removed to allow multiple bills
+// MonthlyBillSchema.index({ tenantId: 1, month: 1, year: 1 }, { unique: true });
 
 // Compound indexes for efficient queries
 MonthlyBillSchema.index({ ownerId: 1, propertyId: 1, month: 1, year: 1 });

@@ -56,7 +56,7 @@ export async function GET(req: Request) {
         const allActiveTenants = await Tenant.find({
             ...baseQuery,
             isActive: true
-        }).select('_id fullName roomNumber propertyId');
+        }).select('_id fullName roomNumber propertyId startDate');
 
         const billsThisMonthData = await MonthlyBill.find({
             ...baseQuery,
@@ -134,7 +134,21 @@ export async function GET(req: Request) {
             .populate('tenantId', 'fullName roomNumber')
             .populate('propertyId', 'name')
             .sort({ 'payments.remainingDue': -1 })
+            .sort({ 'payments.remainingDue': -1 })
             .limit(5);
+
+        // 9. Calculate Total Occupancy Months
+        const nowMs = now.getTime();
+        const totalOccupancyMonths = allActiveTenants.reduce((sum, tenant) => {
+            // startDate is selected above. If missing, assume recent? No, schema has default now.
+            // Accessing tenant.startDate might need type assertion if TS complains, but mongoose document usually works.
+            // However, tenantsWithoutBills uses the same array.
+            const start = new Date(tenant.startDate || now).getTime(); // Fallback to now if missing
+            const diff = Math.max(0, nowMs - start);
+            // Approximate month in ms: 30.44 * 24 * 60 * 60 * 1000 = 2629987200
+            const months = diff / 2629987200;
+            return sum + months;
+        }, 0);
 
         return NextResponse.json({
             summary: {
@@ -147,7 +161,8 @@ export async function GET(req: Request) {
                 currentYear,
                 totalRevenue: currentMonthStats.totalCollected, // Use actual collected amount as revenue
                 totalBilled: currentMonthStats.totalRevenue,
-                electricityUsage: currentMonthStats.electricityUsage
+                electricityUsage: currentMonthStats.electricityUsage,
+                totalOccupancyMonths: Math.round(totalOccupancyMonths)
             },
             tenantsWithoutBills: tenantsWithoutBills.map(t => ({
                 _id: t._id,

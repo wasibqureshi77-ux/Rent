@@ -9,8 +9,9 @@ interface Bill {
     tenantId: { fullName: string; roomNumber: string };
     month: number;
     year: number;
-    totalAmount: number;
-    paidAmount: number;
+    amounts: {
+        totalAmount: number;
+    };
     status: string;
 }
 
@@ -73,15 +74,15 @@ export default function BillsPage() {
                                             <div className="font-semibold text-gray-900 dark:text-white">{bill.tenantId?.fullName || 'Unknown'}</div>
                                             <div className="text-xs text-gray-500">Room {bill.tenantId?.roomNumber || 'N/A'}</div>
                                         </td>
-                                        <td className="px-6 py-4 font-mono">
-                                            ₹ {bill.totalAmount}
+                                        <td className="px-6 py-4 font-mono font-bold">
+                                            ₹ {bill.amounts?.totalAmount?.toLocaleString() || 0}
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${bill.status === 'paid' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
-                                                bill.status === 'partial' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
-                                                    'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${bill.status === 'PAID' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                                                    bill.status === 'PARTIAL' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                                                        'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
                                                 }`}>
-                                                {bill.status.charAt(0).toUpperCase() + bill.status.slice(1)}
+                                                {bill.status}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">

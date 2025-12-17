@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import connectDB from '@/lib/db';
 import MonthlyBill from '@/models/MonthlyBill';
 import PrintButton from '@/components/common/PrintButton';
+import BillActions from '@/components/bills/BillActions';
 
 // Ensure models are registered
 import '@/models/Tenant';
@@ -37,8 +38,6 @@ export default async function BillDetailsPage({ params }: { params: Promise<{ id
     };
 
     // Because 'bill' is a plain object from lean(), we can access properties.
-    // However, some deeper props might need checks if population failed, though our schema enforces IDs usually.
-    // Casting to any to avoid strict TS issues with lean() result vs Interface for this page
     const b: any = bill;
 
     return (
@@ -84,8 +83,14 @@ export default async function BillDetailsPage({ params }: { params: Promise<{ id
                         <p className="font-bold text-lg text-gray-900 dark:text-white">{b.tenantId?.fullName || 'Unknown Tenant'}</p>
                         <p className="text-gray-600 dark:text-gray-300">Room: {b.tenantId?.roomNumber || 'N/A'}</p>
                     </div>
-                    <div className="text-right">
-                        <div className={`inline-block px-4 py-2 rounded-lg font-bold border-2 ${b.status === 'PAID' ? 'border-green-500 text-green-600 bg-green-50' :
+                    <div className="text-right flex justify-end items-start gap-4">
+                        {/* Interactive Actions (Hidden in Print) */}
+                        <div className="print:hidden">
+                            <BillActions billId={id} currentStatus={b.status} />
+                        </div>
+
+                        {/* Static Badge (Visible ONLY in Print) */}
+                        <div className={`hidden print:inline-block px-4 py-2 rounded-lg font-bold border-2 ${b.status === 'PAID' ? 'border-green-500 text-green-600 bg-green-50' :
                                 b.status === 'PARTIAL' ? 'border-yellow-500 text-yellow-600 bg-yellow-50' :
                                     'border-red-500 text-red-600 bg-red-50'
                             }`}>

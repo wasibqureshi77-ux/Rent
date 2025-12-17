@@ -21,6 +21,12 @@ const TenantSchema = new mongoose.Schema({
         required: true,
         index: true
     },
+    roomId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Room',
+        required: true,
+        index: true
+    },
     fullName: {
         type: String,
         required: true

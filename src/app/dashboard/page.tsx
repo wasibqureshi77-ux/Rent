@@ -17,6 +17,7 @@ interface DashboardData {
         totalRevenue: number;
         totalBilled: number;
         electricityUsage: number;
+        totalOccupancyMonths?: number;
     };
     tenantsWithoutBills: Array<{
         _id: string;

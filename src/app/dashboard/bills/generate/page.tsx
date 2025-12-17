@@ -3,8 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
-import { ArrowLeft, RefreshCw, Calculator, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Calculator, CheckCircle2, X } from 'lucide-react';
 import Link from 'next/link';
+
+// Placeholder for QR Code (replace with actual path later)
+const QR_PLACEHOLDER = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=mockupi@okaxis&pn=PGManagement';
 
 interface Tenant {
     _id: string;
@@ -18,7 +21,7 @@ interface Tenant {
 export default function GenerateBillPage() {
     const router = useRouter();
     const [tenants, setTenants] = useState<Tenant[]>([]);
-    const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm({
+    const { register, handleSubmit, watch, setValue, getValues, formState: { errors } } = useForm({
         defaultValues: {
             tenantId: '',
             month: new Date().toISOString().slice(0, 7), // YYYY-MM
@@ -41,6 +44,12 @@ export default function GenerateBillPage() {
     const [calculating, setCalculating] = useState(false);
     const [error, setError] = useState('');
     const [baseRent, setBaseRent] = useState(0);
+
+    // Payment Collection Modal State
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [pendingFormData, setPendingFormData] = useState<any>(null);
+    const [paymentMode, setPaymentMode] = useState<'CASH' | 'UPI'>('CASH');
+    const [collectedAmount, setCollectedAmount] = useState<number>(0);
 
     const values = watch();
     const {
@@ -100,11 +109,11 @@ export default function GenerateBillPage() {
 
     const calculatePartialDays = (tenant: Tenant, selectedMonth: string) => {
         const [yearStr, monthStr] = selectedMonth.split('-');
-        const year = parseInt(yearStr); // e.g. 2025
-        const monthIndex = parseInt(monthStr) - 1; // 0-11. e.g. 11 for Dec
+        const year = parseInt(yearStr);
+        const monthIndex = parseInt(monthStr) - 1;
 
         const monthStart = new Date(year, monthIndex, 1);
-        const monthEnd = new Date(year, monthIndex + 1, 0); // Last day of month
+        const monthEnd = new Date(year, monthIndex + 1, 0);
         const daysInMonth = monthEnd.getDate();
 
         const startDate = new Date(tenant.startDate);
@@ -113,33 +122,24 @@ export default function GenerateBillPage() {
         let isPartial = false;
         let days = 0;
 
-        // Reset first to avoid stuck state
-        // Check if Start Date is in this month
-        // We compare Year and Month
         const startYear = startDate.getFullYear();
-        const startMonth = startDate.getMonth(); // 0-11
+        const startMonth = startDate.getMonth();
 
         if (startYear === year && startMonth === monthIndex) {
-            // Tenant moved in this month
             isPartial = true;
-            // Days = (Total Days - Start Day) + 1
-            // e.g. Started 5th. 31 - 5 + 1 = 27 days (5th to 31st inclusive)
             days = daysInMonth - startDate.getDate() + 1;
         }
 
-        // Check if End Date is in this month (Moved out)
         if (endDate) {
             const endYear = endDate.getFullYear();
             const endMonth = endDate.getMonth();
 
             if (endYear === year && endMonth === monthIndex) {
                 isPartial = true;
-                // If matched start date too (started and ended same month)
                 if (startYear === year && startMonth === monthIndex) {
                     days = endDate.getDate() - startDate.getDate() + 1;
                 } else {
-                    // Only ended this month
-                    days = endDate.getDate(); // 1st to EndDate
+                    days = endDate.getDate();
                 }
             }
         }
@@ -173,15 +173,11 @@ export default function GenerateBillPage() {
     useEffect(() => {
         if (baseRent > 0) {
             if (isPartialRent && Number(daysOccupied) > 0 && month) {
-                // Calculate days in billing month
                 const [yearStr, monthStr] = month.split('-');
                 const daysInMonth = new Date(parseInt(yearStr), parseInt(monthStr), 0).getDate();
-
                 const partial = Math.round((baseRent / daysInMonth) * Number(daysOccupied));
                 setValue('rentAmount', partial);
             } else {
-                // Reset to base rent only if partial is unchecked or 0 days?
-                // Actually, if isPartialRent becomes false, we reset to baseRent.
                 if (!isPartialRent) {
                     setValue('rentAmount', baseRent);
                 }
@@ -189,14 +185,13 @@ export default function GenerateBillPage() {
         }
     }, [isPartialRent, daysOccupied, baseRent, month, setValue]);
 
-    // Auto-Calculate Total Whenever Components Change
+    // Auto-Calculate Total
     useEffect(() => {
         const total =
             (Number(rentAmount) || 0) +
             (Number(waterCharge) || 0) +
             (Number(electricityAmount) || 0) +
             (Number(previousDues) || 0);
-
         setValue('totalAmount', total);
     }, [rentAmount, waterCharge, electricityAmount, previousDues, setValue]);
 
@@ -215,27 +210,7 @@ export default function GenerateBillPage() {
             if (!res.ok) throw new Error(data.message);
 
             setBaseRent(data.rentAmount);
-
-            // If NOT partial rent (auto-detected), set full rent
-            // If partial rent IS auto-detected, logic above sets days, and the Effect calculates partial rent.
-            // But we have a race condition: defaults from API (full rent) vs auto-calc (partial).
-            // Logic:
-            // 1. `calculatePartialDays` runs on tenant/month change. Sets `isPartialRent` and `days`.
-            // 2. `fetchBillDetails` runs on tenant/month change. Sets `baseRent`.
-            // 3. Effect [isPartialRent, days, baseRent] runs. If partial, it overwrites rentAmount.
-            // This should work fine.
-
-            // However, we should set rentAmount here to base just in case, and let effect override.
-            // But we must NOT unset partial rent if we just set it.
-            // We only set rentAmount if we are NOT in partial mode? 
-            // Or just set it and let effect fix it immediately?
-            // "setValue" is async-ish in React Hook Form? No, sync.
-            // If we set full rent here, checking `isPartialRent` (which might be updated by other effect?)
-            // `isPartialRent` comes from `watch()`.
-
-            // Safe bet: Set base rent to `rentAmount` initially (default).
             setValue('rentAmount', data.rentAmount);
-
             setValue('waterCharge', data.waterCharge);
             setValue('electricityRate', data.electricityRate);
             setValue('electricityAmount', data.electricityAmount);
@@ -257,33 +232,47 @@ export default function GenerateBillPage() {
         fetchBillDetails(usage);
     };
 
-    const onSubmit = async (data: any) => {
+    const onFormSubmit = (data: any) => {
+        // Validation for negative usage
         if (Number(data.currentReading) < Number(data.previousReading) && Number(data.currentReading) !== 0) {
-            // warning
+            // Basic warning could go here
         }
+
+        // Instead of API call, show Payment Modal
+        setPendingFormData(data);
+        setCollectedAmount(Math.round(data.totalAmount)); // Default to full payment
+        setShowPaymentModal(true);
+    };
+
+    const confirmPaymentAndGenerate = async () => {
+        if (!pendingFormData) return;
 
         setLoading(true);
         setError('');
 
         try {
-            const tenant = tenants.find(t => t._id === data.tenantId);
+            const tenant = tenants.find(t => t._id === pendingFormData.tenantId);
             if (!tenant) throw new Error('Selected tenant not found');
 
-            const [yearStr, monthStr] = data.month.split('-');
+            const [yearStr, monthStr] = pendingFormData.month.split('-');
             const year = parseInt(yearStr);
             const month = parseInt(monthStr);
 
             const payload = {
-                tenantId: data.tenantId,
+                tenantId: pendingFormData.tenantId,
                 propertyId: tenant.propertyId,
                 month,
                 year,
-                startUnits: Number(data.previousReading),
-                endUnits: Number(data.currentReading),
-                unitsConsumed: Number(data.electricityUsage),
-                rentAmount: Number(data.rentAmount),
-                waterCharge: Number(data.waterCharge),
-                dueDate: data.dueDate
+                startUnits: Number(pendingFormData.previousReading),
+                endUnits: Number(pendingFormData.currentReading),
+                unitsConsumed: Number(pendingFormData.electricityUsage),
+                rentAmount: Number(pendingFormData.rentAmount),
+                waterCharge: Number(pendingFormData.waterCharge),
+                dueDate: pendingFormData.dueDate,
+
+                // Payment Info
+                collectedAmount: Number(collectedAmount),
+                paymentMode: paymentMode
             };
 
             const res = await fetch('/api/bills', {
@@ -300,13 +289,17 @@ export default function GenerateBillPage() {
             router.push('/dashboard/bills');
         } catch (err: any) {
             setError(err.message);
+            // Close modal on error to show error message on main page
+            setShowPaymentModal(false);
         } finally {
             setLoading(false);
         }
     };
 
+    const remainingDueDisplay = (Number(pendingFormData?.totalAmount || 0) - collectedAmount);
+
     return (
-        <div className="max-w-3xl mx-auto space-y-6">
+        <div className="max-w-3xl mx-auto space-y-6 relative">
             <div className="flex items-center gap-4">
                 <Link href="/dashboard/bills" className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                     <ArrowLeft className="h-5 w-5 text-gray-600 dark:text-gray-400" />
@@ -315,8 +308,10 @@ export default function GenerateBillPage() {
             </div>
 
             <div className="bg-white dark:bg-card p-8 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-                    {/* Tenant & Month Selection */}
+                <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-8">
+                    {/* Tenant & Month Selection omitted for brevity - wait, MUST include fully */}
+                    {/* Copied from previous view and maintained */}
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6 border-b border-gray-100 dark:border-gray-800">
                         <div className="md:col-span-1">
                             <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Select Tenant *</label>
@@ -341,7 +336,6 @@ export default function GenerateBillPage() {
                         </div>
                     </div>
 
-                    {/* Meter Readings and Calculation */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div>
                             <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Previous Reading</label>
@@ -377,10 +371,8 @@ export default function GenerateBillPage() {
                         </div>
                     </div>
 
-                    {/* Bill Breakdown */}
                     <div className="bg-gray-50 dark:bg-zinc-900/50 p-6 rounded-lg space-y-4">
                         <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Bill Breakdown</h3>
-
                         <div className="grid grid-cols-2 gap-4 text-sm">
                             <div className="flex justify-between">
                                 <span className="text-gray-600 dark:text-gray-400">Electricity Usage:</span>
@@ -404,7 +396,6 @@ export default function GenerateBillPage() {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                            {/* Rent Section with Partial Option */}
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
                                     <label className="block text-xs font-medium text-gray-500">Rent</label>
@@ -431,7 +422,7 @@ export default function GenerateBillPage() {
                                 <input
                                     type="number"
                                     {...register('rentAmount')}
-                                    readOnly={true} // Strict mode - only calculated
+                                    readOnly={true}
                                     className={`w-full p-2 rounded bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-700 text-right ${isPartialRent ? 'text-primary font-medium' : ''}`}
                                 />
                             </div>
@@ -463,7 +454,6 @@ export default function GenerateBillPage() {
                         </div>
                     </div>
 
-                    {/* Total & Submit */}
                     <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
                         <div className="flex justify-between items-center mb-6">
                             <div className="text-lg font-semibold text-gray-700 dark:text-gray-300">Total Payable Amount</div>
@@ -482,7 +472,6 @@ export default function GenerateBillPage() {
                                 type="hidden"
                                 {...register('dueDate', { required: true })}
                             />
-                            <p className="text-xs text-gray-500 mt-1">Calculated from Tenant's start day</p>
                         </div>
 
                         {error && <div className="mt-4 p-3 bg-red-50 text-red-600 rounded-md text-sm">{error}</div>}
@@ -492,11 +481,94 @@ export default function GenerateBillPage() {
                             disabled={loading || !tenantId || !currentReading}
                             className="w-full mt-6 py-4 px-4 bg-primary hover:bg-orange-600 text-white font-bold text-lg rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {loading ? 'Generating Bill...' : 'Generate Bill'}
+                            {loading ? 'Processing...' : 'Collect Payment'}
                         </button>
                     </div>
                 </form>
             </div>
+
+            {/* Payment Modal */}
+            {showPaymentModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-card w-full max-w-md rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 flex flex-col overflow-hidden">
+                        <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Collect Payment</h3>
+                            <button onClick={() => setShowPaymentModal(false)} className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
+                                <X className="h-5 w-5 text-gray-500" />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-6">
+                            <div className="text-center">
+                                <p className="text-sm text-gray-500 uppercase tracking-widest font-semibold">Total Payable</p>
+                                <p className="text-4xl font-bold text-gray-900 dark:text-white mt-2">
+                                    ₹{Math.round(pendingFormData?.totalAmount || 0).toLocaleString()}
+                                </p>
+                            </div>
+
+                            {/* Payment Mode Tabs */}
+                            <div className="grid grid-cols-2 gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+                                <button
+                                    onClick={() => setPaymentMode('CASH')}
+                                    className={`py-2 text-sm font-semibold rounded-md transition-all ${paymentMode === 'CASH'
+                                            ? 'bg-white dark:bg-zinc-900 text-primary shadow-sm'
+                                            : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                        }`}
+                                >
+                                    Cash
+                                </button>
+                                <button
+                                    onClick={() => setPaymentMode('UPI')}
+                                    className={`py-2 text-sm font-semibold rounded-md transition-all ${paymentMode === 'UPI'
+                                            ? 'bg-white dark:bg-zinc-900 text-primary shadow-sm'
+                                            : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                        }`}
+                                >
+                                    UPI
+                                </button>
+                            </div>
+
+                            {paymentMode === 'UPI' && (
+                                <div className="flex flex-col items-center justify-center space-y-3 py-4 bg-gray-50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
+                                    {/* QR Code Placeholder */}
+                                    <div className="w-40 h-40 bg-white p-2 rounded-lg shadow-sm">
+                                        <img src={QR_PLACEHOLDER} alt="Scan to Pay" className="w-full h-full object-contain" />
+                                    </div>
+                                    <p className="text-xs text-gray-500">Scan QR to Pay via Billing App</p>
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Amount Collected</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-semibold">₹</span>
+                                    <input
+                                        type="number"
+                                        value={collectedAmount}
+                                        onChange={(e) => setCollectedAmount(Number(e.target.value))}
+                                        className="w-full pl-8 pr-4 py-3 rounded-lg bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-primary focus:outline-none text-lg font-bold"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex justify-between items-center text-sm p-3 bg-gray-50 dark:bg-zinc-900/30 rounded-lg">
+                                <span className="text-gray-600 dark:text-gray-400">Remaining Due:</span>
+                                <span className={`font-bold ${remainingDueDisplay > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                                    ₹ {remainingDueDisplay.toLocaleString()}
+                                </span>
+                            </div>
+
+                            <button
+                                onClick={confirmPaymentAndGenerate}
+                                disabled={loading}
+                                className="w-full py-3 bg-primary hover:bg-orange-600 text-white font-bold rounded-xl shadow-lg transition-all"
+                            >
+                                {loading ? 'Processing...' : `Confirm ${paymentMode === 'CASH' ? 'Cash' : 'UPI'} Payment`}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

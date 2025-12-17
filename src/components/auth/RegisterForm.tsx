@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { signIn } from 'next-auth/react';
 
 export default function RegisterForm() {
     const [formData, setFormData] = useState({
@@ -45,12 +46,25 @@ export default function RegisterForm() {
             }
 
             if (data.requiresVerification) {
-                setSuccess('Registration successful! Please check your email to verify your account.');
+                setSuccess('Registration successful! Logging you in...');
+
+                // Auto login
+                const loginResult = await signIn('credentials', {
+                    email: formData.email,
+                    password: formData.password,
+                    redirect: false,
+                });
+
+                if (loginResult?.error) {
+                    setError('Auto-login failed. Please try logging in manually.');
+                    setTimeout(() => router.push('/login'), 2000);
+                } else {
+                    router.push('/dashboard');
+                }
             } else {
                 setSuccess('Super admin account created! You can now login.');
+                setTimeout(() => router.push('/login'), 3000);
             }
-
-            setTimeout(() => router.push('/login'), 3000);
         } catch (err: any) {
             setError(err.message);
         } finally {

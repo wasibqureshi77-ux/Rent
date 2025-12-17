@@ -66,12 +66,12 @@ function VerifyEmailContent() {
                             <p className="text-gray-600 dark:text-gray-400 mb-6">
                                 {message}
                             </p>
-                            <Link
-                                href="/login"
+                            <button
+                                onClick={() => window.location.href = '/dashboard'}
                                 className="inline-block bg-primary hover:bg-orange-600 text-white font-semibold px-6 py-3 rounded-lg transition-all"
                             >
-                                Go to Login
-                            </Link>
+                                Continue to Dashboard
+                            </button>
                         </>
                     )}
 

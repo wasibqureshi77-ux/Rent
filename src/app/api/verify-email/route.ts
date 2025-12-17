@@ -24,8 +24,9 @@ export async function GET(req: Request) {
             }, { status: 400 });
         }
 
-        // Mark user as verified
-        user.isVerified = true;
+        // Mark user as verified and ACTIVE
+        user.status = 'ACTIVE';
+        user.emailVerifiedAt = new Date();
         user.verificationToken = undefined;
         user.verificationTokenExpiry = undefined;
         await user.save();

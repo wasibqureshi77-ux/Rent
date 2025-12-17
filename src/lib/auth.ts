@@ -32,9 +32,10 @@ export const authOptions: NextAuthOptions = {
                 }
 
                 // Check user status
-                if (user.status === 'PENDING_EMAIL_VERIFICATION') {
-                    throw new Error('Please verify your email address. Check your inbox for the verification link.');
-                }
+                // Allow login for PENDING_EMAIL_VERIFICATION to show verification screen
+                // if (user.status === 'PENDING_EMAIL_VERIFICATION') {
+                //     throw new Error('Please verify your email address. Check your inbox for the verification link.');
+                // }
 
                 if (user.status === 'PENDING_APPROVAL') {
                     throw new Error('Your account is awaiting admin approval. You will be notified once approved.');
@@ -48,7 +49,8 @@ export const authOptions: NextAuthOptions = {
                     throw new Error('Your account has been suspended. Please contact support.');
                 }
 
-                if (user.status !== 'ACTIVE') {
+                // For other statuses (e.g. DELETED), block access
+                if (user.status !== 'ACTIVE' && user.status !== 'PENDING_EMAIL_VERIFICATION') {
                     throw new Error('Account is not active. Please contact support.');
                 }
 
@@ -57,6 +59,7 @@ export const authOptions: NextAuthOptions = {
                     name: user.name,
                     email: user.email,
                     role: user.role,
+                    status: user.status,
                     themePreference: user.themePreference,
                 };
             }
@@ -67,6 +70,7 @@ export const authOptions: NextAuthOptions = {
             if (user) {
                 token.role = user.role;
                 token.id = user.id;
+                token.status = user.status;
                 token.themePreference = user.themePreference;
             }
             return token;
@@ -76,6 +80,26 @@ export const authOptions: NextAuthOptions = {
                 session.user.role = token.role as string;
                 session.user.id = token.id as string;
                 session.user.themePreference = token.themePreference as string;
+
+                // CRITICAL FIX: Always fetch fresh status from DB to reflect verification immediately
+                // The JWT might still have the old 'PENDING_EMAIL_VERIFICATION' status
+                if (token.id) {
+                    try {
+                        await connectDB();
+                        const freshUser = await User.findById(token.id).select('status');
+                        console.log('Session Check:', { tokenId: token.id, freshStatus: freshUser?.status, tokenStatus: token.status });
+                        if (freshUser) {
+                            session.user.status = freshUser.status;
+                        } else {
+                            session.user.status = token.status as string;
+                        }
+                    } catch (error) {
+                        console.error("Error fetching fresh user status", error);
+                        session.user.status = token.status as string;
+                    }
+                } else {
+                    session.user.status = token.status as string;
+                }
             }
             return session;
         }

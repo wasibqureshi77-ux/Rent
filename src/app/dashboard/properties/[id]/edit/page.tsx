@@ -20,7 +20,7 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
         isActive: true
     });
 
-    useEffect(() => {
+    useEffect(() => { 
         fetchProperty();
     }, [id]);
 

@@ -45,9 +45,14 @@ export default function BillActions({ billId, currentStatus }: BillActionsProps)
             if (res.ok) {
                 router.push('/dashboard/bills');
                 router.refresh();
+            } else {
+                const errorData = await res.json();
+                alert(`Failed to delete: ${errorData.message}`);
+                setLoading(false);
             }
         } catch (error) {
             console.error('Failed to delete bill', error);
+            alert('An error occurred while deleting.');
             setLoading(false);
         }
     };
@@ -61,8 +66,8 @@ export default function BillActions({ billId, currentStatus }: BillActionsProps)
                     onChange={(e) => handleStatusChange(e.target.value)}
                     disabled={loading}
                     className={`appearance-none pl-3 pr-8 py-2 rounded-lg font-bold border-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ${status === 'PAID' ? 'border-green-500 text-green-600 bg-green-50 focus:ring-green-500' :
-                            status === 'PARTIAL' ? 'border-yellow-500 text-yellow-600 bg-yellow-50 focus:ring-yellow-500' :
-                                'border-red-500 text-red-600 bg-red-50 focus:ring-red-500'
+                        status === 'PARTIAL' ? 'border-yellow-500 text-yellow-600 bg-yellow-50 focus:ring-yellow-500' :
+                            'border-red-500 text-red-600 bg-red-50 focus:ring-red-500'
                         }`}
                 >
                     <option value="PENDING">PENDING</option>
@@ -70,8 +75,8 @@ export default function BillActions({ billId, currentStatus }: BillActionsProps)
                     <option value="PAID">PAID</option>
                 </select>
                 <div className={`absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none ${status === 'PAID' ? 'text-green-600' :
-                        status === 'PARTIAL' ? 'text-yellow-600' :
-                            'text-red-600'
+                    status === 'PARTIAL' ? 'text-yellow-600' :
+                        'text-red-600'
                     }`}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
                 </div>

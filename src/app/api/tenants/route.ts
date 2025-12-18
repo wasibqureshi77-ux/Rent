@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/db';
 import Tenant from '@/models/Tenant';
+import '@/models/Property';
 import MonthlyBill from '@/models/MonthlyBill';
 import Room from '@/models/Room';
 
@@ -118,7 +119,66 @@ export async function GET(req: Request) {
             .populate('propertyId', 'name')
             .sort({ createdAt: -1 });
 
-        return NextResponse.json(tenants);
+        // Enhance tenants with dynamic stats
+        const enhancedTenants = await Promise.all(tenants.map(async (tenant) => {
+            // 1. Get Latest Bill for Meter Reading
+            const latestBill = await MonthlyBill.findOne({ tenantId: tenant._id })
+                .sort({ year: -1, month: -1 });
+
+            const lastMeterReading = latestBill?.meter?.endUnits ?? tenant.meterReadingStart;
+
+            // 2. Calculate Total Due
+            // Sum of (total - paid) for all bills that are not fully paid
+            const unpaidBills = await MonthlyBill.find({
+                tenantId: tenant._id,
+                status: { $in: ['PENDING', 'PARTIAL'] }
+            });
+
+            const totalDue = unpaidBills.reduce((sum: number, bill: any) => {
+                const total = bill.amounts?.totalAmount || 0;
+                const paid = bill.amounts?.paidAmount || 0;
+                // If bill is PARTIAL/PENDING, add remaining
+                return sum + (total - paid);
+            }, 0);
+
+            // 3. Calculate Current Month Completion Date
+            // If started on 5th, cycle ends on 4th of next month relative to today
+            let cycleEndDate: Date | null = null;
+            if (tenant.startDate) {
+                const today = new Date();
+                const startDay = new Date(tenant.startDate).getDate();
+
+                // Construct a date in the current month with the start day
+                const currentMonthCycleStart = new Date(today.getFullYear(), today.getMonth(), startDay);
+
+                // If today is after the start day (e.g., today 18th, start 5th), the cycle ends next month
+                // If today is before (e.g., today 2nd, start 5th), current cycle ends this month
+                // Actually, typically "Completion Date" means the end of the *current active* rental month.
+
+                let targetMonth = today.getMonth();
+                if (today.getDate() >= startDay) {
+                    targetMonth = today.getMonth() + 1;
+                }
+
+                // The end date is "Start Day - 1" of the target month
+                // But simplified: If cycle starts on 5th, it ends on 4th.
+                // We create date for Start Day of Target Month, then subtract 1 day.
+                const nextCycleStart = new Date(today.getFullYear(), targetMonth, startDay);
+                cycleEndDate = new Date(nextCycleStart);
+                cycleEndDate.setDate(cycleEndDate.getDate() - 1);
+            }
+
+            return {
+                ...tenant.toObject(),
+                stats: {
+                    lastMeterReading,
+                    totalDue,
+                    cycleEndDate
+                }
+            };
+        }));
+
+        return NextResponse.json(enhancedTenants);
     } catch (error) {
         console.error('Error fetching tenants:', error);
         return NextResponse.json({ message: 'Error fetching tenants' }, { status: 500 });

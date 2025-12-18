@@ -9,7 +9,7 @@ export const authOptions: NextAuthOptions = {
         CredentialsProvider({
             name: 'Credentials',
             credentials: {
-                email: { label: "Email", type: "email" },
+                email: { label: "Email or Mobile", type: "text" },
                 password: { label: "Password", type: "password" },
                 impersonationToken: { label: "Impersonation Token", type: "text" }
             },
@@ -59,10 +59,16 @@ export const authOptions: NextAuthOptions = {
                     throw new Error('Invalid credentials');
                 }
 
-                const user = await User.findOne({ email: credentials.email });
+                // Check for email OR phone
+                const user = await User.findOne({
+                    $or: [
+                        { email: credentials.email },
+                        { phone: credentials.email }
+                    ]
+                });
 
                 if (!user) {
-                    throw new Error('No user found with this email');
+                    throw new Error('No user found with this email or mobile number');
                 }
 
                 const isValid = await bcrypt.compare(credentials.password, user.password);

@@ -12,6 +12,11 @@ interface Tenant {
     baseRent: number;
     isActive: boolean;
     propertyId?: any;
+    stats?: {
+        lastMeterReading: number;
+        totalDue: number;
+        cycleEndDate: string;
+    };
 }
 
 export default function TenantsPage() {
@@ -121,7 +126,7 @@ export default function TenantsPage() {
                                     </button>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-4 mb-4">
+                            <div className="flex items-center gap-4 mb-6">
                                 <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center text-blue-600 font-bold text-lg">
                                     {tenant.fullName?.charAt(0) || 'T'}
                                 </div>
@@ -130,14 +135,34 @@ export default function TenantsPage() {
                                     <p className="text-sm text-gray-500">Room {tenant.roomNumber || 'N/A'}</p>
                                 </div>
                             </div>
-                            <div className="mt-auto space-y-2 text-sm">
-                                <div className="flex justify-between text-gray-500">
-                                    <span>Phone:</span>
-                                    <span className="font-medium text-gray-900 dark:text-gray-300">{tenant.phoneNumber || 'N/A'}</span>
-                                </div>
-                                <div className="flex justify-between text-gray-500">
-                                    <span>Rent:</span>
-                                    <span className="font-medium text-gray-900 dark:text-gray-300">₹ {tenant.baseRent || 0}</span>
+
+                            <div className="space-y-3 text-sm border-t border-gray-100 dark:border-gray-800 pt-4">
+                                <div className="grid grid-cols-2 gap-y-3">
+                                    <div>
+                                        <p className="text-xs text-gray-500">Cycle Ends</p>
+                                        <p className="font-medium text-gray-900 dark:text-gray-200">
+                                            {tenant.stats?.cycleEndDate
+                                                ? new Date(tenant.stats.cycleEndDate).toLocaleDateString('en-GB')
+                                                : 'N/A'}
+                                        </p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-xs text-gray-500">Last Meter</p>
+                                        <p className="font-medium text-gray-900 dark:text-gray-200">
+                                            {tenant.stats?.lastMeterReading ?? 0}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-gray-500">Rent</p>
+                                        <p className="font-medium text-gray-900 dark:text-gray-200">₹ {tenant.baseRent || 0}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-xs text-gray-500">Due Amount</p>
+                                        <p className={`font-bold ${(tenant.stats?.totalDue || 0) > 0 ? 'text-red-600' : 'text-green-600'
+                                            }`}>
+                                            ₹ {tenant.stats?.totalDue || 0}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </div>

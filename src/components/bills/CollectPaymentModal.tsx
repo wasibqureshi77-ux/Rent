@@ -18,6 +18,7 @@ export default function CollectPaymentModal({ billId, totalAmount, paidAmount, u
     const [amount, setAmount] = useState(remainingDue);
     const [method, setMethod] = useState<'CASH' | 'UPI'>('CASH');
     const [loading, setLoading] = useState(false);
+    const [isQrExpanded, setIsQrExpanded] = useState(false);
 
     const handleSubmit = async () => {
         setLoading(true);
@@ -63,8 +64,8 @@ export default function CollectPaymentModal({ billId, totalAmount, paidAmount, u
                         <button
                             onClick={() => setMethod('CASH')}
                             className={`py-2 px-4 rounded-md text-sm font-medium transition-all ${method === 'CASH'
-                                    ? 'bg-zinc-800 text-white shadow-sm'
-                                    : 'text-gray-500 hover:text-white hover:bg-white/5'
+                                ? 'bg-zinc-800 text-white shadow-sm'
+                                : 'text-gray-500 hover:text-white hover:bg-white/5'
                                 }`}
                         >
                             Cash
@@ -72,8 +73,8 @@ export default function CollectPaymentModal({ billId, totalAmount, paidAmount, u
                         <button
                             onClick={() => setMethod('UPI')}
                             className={`py-2 px-4 rounded-md text-sm font-medium transition-all ${method === 'UPI'
-                                    ? 'bg-[#ff6d00]/10 text-[#ff6d00] border border-[#ff6d00]/20 shadow-sm'
-                                    : 'text-gray-500 hover:text-white hover:bg-white/5'
+                                ? 'bg-[#ff6d00]/10 text-[#ff6d00] border border-[#ff6d00]/20 shadow-sm'
+                                : 'text-gray-500 hover:text-white hover:bg-white/5'
                                 }`}
                         >
                             UPI
@@ -83,10 +84,32 @@ export default function CollectPaymentModal({ billId, totalAmount, paidAmount, u
                     {/* QR Code Segment - Only show if UPI is selected AND qr code exists */}
                     {method === 'UPI' && upiQrCode && (
                         <div className="border border-dashed border-white/10 rounded-xl p-6 bg-zinc-950/30 flex flex-col items-center justify-center gap-4 transition-all animate-in zoom-in-95">
-                            <div className="bg-white p-2 rounded-lg">
+                            <div
+                                className="bg-white p-2 rounded-lg cursor-pointer hover:scale-105 transition-transform"
+                                onClick={() => setIsQrExpanded(true)}
+                                title="Click to expand"
+                            >
                                 <img src={upiQrCode} alt="UPI QR" className="w-40 h-40 object-contain" />
                             </div>
                             <p className="text-xs text-gray-500">Scan QR to Pay via Billing App</p>
+                        </div>
+                    )}
+
+                    {/* Expanded QR Modal */}
+                    {isQrExpanded && upiQrCode && (
+                        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-in fade-in duration-200" onClick={() => setIsQrExpanded(false)}>
+                            <div className="relative max-w-full max-h-full flex flex-col items-center" onClick={e => e.stopPropagation()}>
+                                <button
+                                    onClick={() => setIsQrExpanded(false)}
+                                    className="absolute -top-12 right-0 md:-right-12 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+                                >
+                                    <X className="h-6 w-6" />
+                                </button>
+                                <div className="bg-white p-4 rounded-xl shadow-2xl overflow-hidden">
+                                    <img src={upiQrCode} alt="Expanded UPI QR" className="max-w-[80vw] max-h-[70vh] object-contain" />
+                                </div>
+                                <p className="text-white/70 mt-4 text-sm font-medium">Scan with any UPI App</p>
+                            </div>
                         </div>
                     )}
 

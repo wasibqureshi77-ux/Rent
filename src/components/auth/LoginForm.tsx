@@ -39,14 +39,14 @@ export default function LoginForm() {
             </h2>
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
-                    <label className="block text-sm font-medium mb-1">Email</label>
+                    <label className="block text-sm font-medium mb-1">Email or Mobile Number</label>
                     <input
-                        type="email"
+                        type="text"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         className="w-full p-3 rounded-lg bg-white/50 dark:bg-black/20 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-primary focus:outline-none transition-all"
                         required
-                        placeholder="admin@example.com"
+                        placeholder="Email or Mobile Number"
                     />
                 </div>
                 <div>

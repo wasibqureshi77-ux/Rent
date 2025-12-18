@@ -6,9 +6,6 @@ import { useForm } from 'react-hook-form';
 import { ArrowLeft, RefreshCw, Calculator, CheckCircle2, X } from 'lucide-react';
 import Link from 'next/link';
 
-// Placeholder for QR Code (replace with actual path later)
-const QR_PLACEHOLDER = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=mockupi@okaxis&pn=PGManagement';
-
 interface Tenant {
     _id: string;
     fullName: string;
@@ -44,6 +41,18 @@ export default function GenerateBillPage() {
     const [calculating, setCalculating] = useState(false);
     const [error, setError] = useState('');
     const [baseRent, setBaseRent] = useState(0);
+    const [upiQrCode, setUpiQrCode] = useState<string>('');
+    const [isQrExpanded, setIsQrExpanded] = useState(false);
+
+    // Fetch Settings for QR Code on mount
+    useEffect(() => {
+        fetch('/api/settings')
+            .then(res => res.json())
+            .then(data => {
+                if (data.upiQrCode) setUpiQrCode(data.upiQrCode);
+            })
+            .catch(err => console.error('Error fetching settings:', err));
+    }, []);
 
     // Payment Collection Modal State
     const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -511,8 +520,8 @@ export default function GenerateBillPage() {
                                 <button
                                     onClick={() => setPaymentMode('CASH')}
                                     className={`py-2 text-sm font-semibold rounded-md transition-all ${paymentMode === 'CASH'
-                                            ? 'bg-white dark:bg-zinc-900 text-primary shadow-sm'
-                                            : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                        ? 'bg-white dark:bg-zinc-900 text-primary shadow-sm'
+                                        : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
                                         }`}
                                 >
                                     Cash
@@ -520,8 +529,8 @@ export default function GenerateBillPage() {
                                 <button
                                     onClick={() => setPaymentMode('UPI')}
                                     className={`py-2 text-sm font-semibold rounded-md transition-all ${paymentMode === 'UPI'
-                                            ? 'bg-white dark:bg-zinc-900 text-primary shadow-sm'
-                                            : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                        ? 'bg-white dark:bg-zinc-900 text-primary shadow-sm'
+                                        : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
                                         }`}
                                 >
                                     UPI
@@ -530,11 +539,46 @@ export default function GenerateBillPage() {
 
                             {paymentMode === 'UPI' && (
                                 <div className="flex flex-col items-center justify-center space-y-3 py-4 bg-gray-50 dark:bg-zinc-900/50 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
-                                    {/* QR Code Placeholder */}
-                                    <div className="w-40 h-40 bg-white p-2 rounded-lg shadow-sm">
-                                        <img src={QR_PLACEHOLDER} alt="Scan to Pay" className="w-full h-full object-contain" />
+                                    {/* QR Code Display */}
+                                    <div className="w-40 h-40 bg-white p-2 rounded-lg shadow-sm flex items-center justify-center">
+                                        {upiQrCode ? (
+                                            <div
+                                                className="w-full h-full cursor-pointer hover:opacity-90 transition-opacity relative group"
+                                                onClick={() => setIsQrExpanded(true)}
+                                            >
+                                                <img src={upiQrCode} alt="Scan to Pay" className="w-full h-full object-contain" />
+                                                <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-lg">
+                                                    <span className="text-[10px] font-bold text-black bg-white/80 px-2 py-1 rounded-full">Expand</span>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-center p-2">
+                                                <p className="text-xs text-gray-400">No QR Code Uploaded</p>
+                                                <Link href="/dashboard/settings" className="text-xs text-primary hover:underline block mt-1">
+                                                    Go to Settings
+                                                </Link>
+                                            </div>
+                                        )}
                                     </div>
                                     <p className="text-xs text-gray-500">Scan QR to Pay via Billing App</p>
+                                </div>
+                            )}
+
+                            {/* Fullscreen QR Modal */}
+                            {isQrExpanded && upiQrCode && (
+                                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-in fade-in duration-200" onClick={() => setIsQrExpanded(false)}>
+                                    <div className="relative max-w-full max-h-full flex flex-col items-center" onClick={e => e.stopPropagation()}>
+                                        <button
+                                            onClick={() => setIsQrExpanded(false)}
+                                            className="absolute -top-12 right-0 md:-right-12 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+                                        >
+                                            <X className="h-6 w-6" />
+                                        </button>
+                                        <div className="bg-white p-4 rounded-xl shadow-2xl overflow-hidden">
+                                            <img src={upiQrCode} alt="Expanded UPI QR" className="max-w-[80vw] max-h-[70vh] object-contain" />
+                                        </div>
+                                        <p className="text-white/70 mt-4 text-sm font-medium">Scan with any UPI App</p>
+                                    </div>
                                 </div>
                             )}
 

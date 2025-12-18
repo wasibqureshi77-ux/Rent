@@ -12,6 +12,8 @@ import CollectPaymentButton from '@/components/bills/CollectPaymentButton';
 import '@/models/Tenant';
 import '@/models/Property';
 
+export const dynamic = 'force-dynamic';
+
 export default async function BillDetailsPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
 
@@ -81,30 +83,37 @@ export default async function BillDetailsPage({ params }: { params: Promise<{ id
     // If we didn't populate 'userId' specifically, we might miss it.
     // Let's assume standard Property schema uses 'userId' for the owner.
     // We need to re-fetch the user details safely.
-    const propertyId = b.propertyId?._id;
-    let upiQrCode = undefined;
+    // Robustly determine Property ID (handle populate vs non-populate)
+    const rawProp = b.propertyId;
+    const propId = (rawProp && typeof rawProp === 'object' && '_id' in rawProp)
+        ? rawProp._id
+        : rawProp;
 
-    if (propertyId) {
-        // We can just query User who owns this property. 
-        // Depending on schema, it might be easier to just look up the Property again to get the userId if missing.
-        // However, we can also guess if the current user session is the owner, but this is a server comp.
-        // Let's rely on finding the User via the Property document if we had it.
-        // Actually, let's just use `User` to find the one who has this property in `properties` array if that existed? No.
-        // Backwards: Property -> userId.
-        // Let's fetch the Property specifically to be sure.
-        const { default: Property } = await import('@/models/Property');
-        const property = await Property.findById(propertyId).lean();
-        if (property && property.ownerId) {
-            const owner = await User.findById(property.ownerId).lean();
-            if (owner && owner.settings && owner.settings.upiQrCode) {
-                upiQrCode = owner.settings.upiQrCode;
+    let upiQrCode: string | undefined = undefined;
+
+    if (propId) {
+        try {
+            const { default: Property } = await import('@/models/Property');
+            const property = await Property.findById(propId).lean();
+
+            if (property && property.ownerId) {
+                const owner = await User.findById(property.ownerId).lean();
+                if (owner && owner.settings && owner.settings.upiQrCode) {
+                    const code = owner.settings.upiQrCode;
+                    // Ensure it is a valid URL to avoid "undefined" string issues
+                    if (typeof code === 'string' && code.startsWith('http')) {
+                        upiQrCode = code;
+                    }
+                }
             }
+        } catch (err) {
+            console.error('Error fetching QR code:', err);
         }
     }
 
     return (
         <div className="max-w-4xl mx-auto space-y-6 print:p-0 print:max-w-none">
-            {/* Header / Navigation */}
+            {/* ... existing header ... */}
             <div className="flex items-center justify-between print:hidden">
                 <div className="flex items-center gap-4">
                     <Link href="/dashboard/bills" className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
@@ -126,7 +135,7 @@ export default async function BillDetailsPage({ params }: { params: Promise<{ id
 
             {/* Bill Content - Printable Area */}
             <div className="bg-white dark:bg-zinc-900 p-8 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm print:border-none print:shadow-none print:p-0">
-                {/* Bill Header */}
+                {/* ... existing content ... */}
                 <div className="border-b border-gray-200 dark:border-gray-700 pb-6 mb-6 flex justify-between items-start">
                     <div>
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
@@ -247,6 +256,17 @@ export default async function BillDetailsPage({ params }: { params: Promise<{ id
                 <div className="text-center text-sm text-gray-500 mt-12 print:mt-20">
                     <p>Thank you for your business!</p>
                 </div>
+            </div>
+
+            {/* DEBUG INFO - Temporary */}
+            <div className="print:hidden p-4 bg-gray-100 dark:bg-zinc-800 rounded-lg text-xs font-mono break-all opacity-75 hover:opacity-100 transition-opacity">
+                <p className="font-bold text-red-500 mb-2">DEBUG INFO (Visible to Admin):</p>
+                <p>Bill ID: {id}</p>
+                <p>Property ID: {propId}</p>
+                <p>Property Owner ID: {b.propertyId?.ownerId || 'Not found'}</p>
+                <p>QR Code URL Found: {upiQrCode ? 'YES' : 'NO'}</p>
+                {upiQrCode && <p>URL: {upiQrCode}</p>}
+                {!upiQrCode && <p className="text-orange-500">Warning: No QR code found for this Property Owner.</p>}
             </div>
         </div>
     );

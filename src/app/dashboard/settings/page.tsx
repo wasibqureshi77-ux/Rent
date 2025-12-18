@@ -6,7 +6,7 @@ import { Save } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 
 export default function SettingsPage() {
-    const { register, handleSubmit, setValue, watch } = useForm();
+    const { register, handleSubmit, setValue, watch, getValues } = useForm();
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
     const upiQrCode = watch('upiQrCode');
@@ -118,6 +118,9 @@ export default function SettingsPage() {
                                                 if (res.ok) {
                                                     const data = await res.json();
                                                     setValue('upiQrCode', data.url, { shouldDirty: true });
+
+                                                    // Auto-save settings after upload
+                                                    await onSubmit({ ...getValues(), upiQrCode: data.url });
                                                 } else {
                                                     const errorData = await res.json();
                                                     console.error('Upload failed:', errorData.message);

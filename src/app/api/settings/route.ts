@@ -32,7 +32,7 @@ export async function PUT(req: Request) {
 
     try {
         const body = await req.json();
-        const { fixedWaterBill, electricityRatePerUnit, currency } = body;
+        const { fixedWaterBill, electricityRatePerUnit, currency, upiQrCode } = body;
 
         const user = await User.findByIdAndUpdate(
             session.user.id,
@@ -40,7 +40,8 @@ export async function PUT(req: Request) {
                 $set: {
                     'settings.fixedWaterBill': fixedWaterBill,
                     'settings.electricityRatePerUnit': electricityRatePerUnit,
-                    'settings.currency': currency
+                    'settings.currency': currency,
+                    'settings.upiQrCode': upiQrCode
                 }
             },
             { new: true }

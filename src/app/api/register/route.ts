@@ -45,7 +45,7 @@ export async function POST(req: Request) {
             name,
             email,
             password: hashedPassword,
-            role: isFirstUser ? 'super_admin' : 'owner',
+            role: isFirstUser ? 'SUPER_ADMIN' : 'PROPERTY_OWNER',
             isVerified: isFirstUser,
             isApproved: isFirstUser,
             verificationToken: isFirstUser ? undefined : verificationToken,

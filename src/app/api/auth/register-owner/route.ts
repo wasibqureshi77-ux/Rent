@@ -10,7 +10,7 @@ const registerSchema = z.object({
     email: z.string().email('Invalid email address'),
     password: z.string().min(6, 'Password must be at least 6 characters'),
     confirmPassword: z.string(),
-    phone: z.string().optional(),
+    phone: z.string().min(10, 'Mobile number is required'),
     propertyName: z.string().optional(),
 }).refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",

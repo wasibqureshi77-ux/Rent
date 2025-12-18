@@ -29,7 +29,11 @@ export default function Sidebar() {
     }, [pathname]);
 
     const activeNavigation = session?.user?.role === 'SUPER_ADMIN'
-        ? [...navigation, { name: 'Admin Users', href: '/dashboard/admin/users', icon: Shield }]
+        ? [
+            ...navigation,
+            { name: 'Admin Users', href: '/dashboard/admin/users', icon: Shield },
+            { name: 'SU Settings', href: '/dashboard/admin/settings', icon: Settings }
+        ]
         : navigation;
 
     return (
@@ -124,23 +128,45 @@ export default function Sidebar() {
                             </li>
 
                             <li className="mt-auto">
-                                <div className="flex items-center gap-x-4 py-3 text-sm font-semibold leading-6 text-gray-900 dark:text-white border-t border-gray-200/50 dark:border-gray-700/50 pt-4">
-                                    <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-purple-500 to-amber-500 flex items-center justify-center text-white text-xs">
-                                        {session?.user?.name?.charAt(0) || 'U'}
+                                {(session?.user as any)?.isImpersonating ? (
+                                    <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                                        <div className="flex items-center gap-2 text-red-500 mb-2">
+                                            <Shield className="h-4 w-4" />
+                                            <span className="text-xs font-bold uppercase tracking-wider">Viewing as User</span>
+                                        </div>
+                                        <p className="text-xs text-gray-600 dark:text-gray-400 mb-3 line-clamp-1">
+                                            {session?.user?.name}
+                                        </p>
+                                        <button
+                                            onClick={() => signOut({ callbackUrl: '/login' })}
+                                            className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2 px-3 rounded-md transition-colors"
+                                        >
+                                            <LogOut className="h-3 w-3" />
+                                            Exit & Return
+                                        </button>
                                     </div>
-                                    <span className="sr-only">Your profile</span>
-                                    <span aria-hidden="true" className="truncate w-full">
-                                        {session?.user?.name}
-                                        <p className="text-xs text-gray-400 font-normal truncate">{session?.user?.email}</p>
-                                    </span>
-                                </div>
-                                <button
-                                    onClick={() => signOut({ callbackUrl: '/login' })}
-                                    className="w-full mt-2 group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold text-gray-700 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/10 hover:text-red-600 transition-all items-center"
-                                >
-                                    <LogOut className="h-5 w-5 shrink-0" />
-                                    Sign out
-                                </button>
+                                ) : (
+                                    <div className="flex items-center gap-x-4 py-3 text-sm font-semibold leading-6 text-gray-900 dark:text-white border-t border-gray-200/50 dark:border-gray-700/50 pt-4">
+                                        <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-purple-500 to-amber-500 flex items-center justify-center text-white text-xs">
+                                            {session?.user?.name?.charAt(0) || 'U'}
+                                        </div>
+                                        <span className="sr-only">Your profile</span>
+                                        <span aria-hidden="true" className="truncate w-full">
+                                            {session?.user?.name}
+                                            <p className="text-xs text-gray-400 font-normal truncate">{session?.user?.email}</p>
+                                        </span>
+                                    </div>
+                                )}
+
+                                {!(session?.user as any)?.isImpersonating && (
+                                    <button
+                                        onClick={() => signOut({ callbackUrl: '/login' })}
+                                        className="w-full mt-2 group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold text-gray-700 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/10 hover:text-red-600 transition-all items-center"
+                                    >
+                                        <LogOut className="h-5 w-5 shrink-0" />
+                                        Sign out
+                                    </button>
+                                )}
                             </li>
                         </ul>
                     </nav>

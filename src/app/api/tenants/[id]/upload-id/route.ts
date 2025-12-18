@@ -3,7 +3,6 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/db';
 import Tenant from '@/models/Tenant';
-import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { extractDocumentNumberByType } from '@/lib/ocr';
 
@@ -54,27 +53,28 @@ export async function POST(
             }, { status: 404 });
         }
 
-        // Create uploads directory if it doesn't exist
-        const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'id-proofs');
-        try {
-            await mkdir(uploadsDir, { recursive: true });
-        } catch (error) {
-            // Directory might already exist
-        }
-
         // Generate unique filename
         const timestamp = Date.now();
         const fileExtension = file.name.split('.').pop();
         const fileName = `${tenant._id}_${timestamp}.${fileExtension}`;
-        const filePath = path.join(uploadsDir, fileName);
 
         // Save file
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
-        await writeFile(filePath, buffer);
 
-        // File URL (accessible via /uploads/id-proofs/...)
-        const fileUrl = `/uploads/id-proofs/${fileName}`;
+        // Upload to Cloudinary
+        let fileUrl: string;
+        try {
+            // Dynamic import to avoid issues if utils not present, though we created it.
+            const { uploadToCloudinary } = await import('@/lib/cloudinary');
+            const result = await uploadToCloudinary(buffer, 'id-proofs', fileName);
+            fileUrl = result.url;
+        } catch (uploadError: any) {
+            console.error('Cloudinary upload error:', uploadError);
+            return NextResponse.json({
+                message: 'Error uploading file to cloud storage'
+            }, { status: 500 });
+        }
 
         // Try to extract document number from image
         // For now, we'll use manual input or pattern matching on filename

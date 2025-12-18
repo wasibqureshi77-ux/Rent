@@ -28,6 +28,13 @@ const UserSchema = new mongoose.Schema({
         fixedWaterBill: { type: Number, default: 0 },
         electricityRatePerUnit: { type: Number, default: 0 },
         currency: { type: String, default: 'INR' },
+        upiQrCode: { type: String }
+    },
+    subscription: {
+        status: { type: String, enum: ['ACTIVE', 'INACTIVE', 'OVERDUE'], default: 'INACTIVE' },
+        nextBillingDate: { type: Date },
+        lastPaymentDate: { type: Date },
+        planAmount: { type: Number }
     },
 }, { timestamps: true });
 

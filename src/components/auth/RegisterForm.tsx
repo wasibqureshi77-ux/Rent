@@ -129,7 +129,7 @@ export default function RegisterForm() {
                     />
                 </div>
                 <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Phone (Optional)</label>
+                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Mobile Number *</label>
                     <input
                         type="tel"
                         name="phone"
@@ -137,6 +137,7 @@ export default function RegisterForm() {
                         onChange={handleChange}
                         className="w-full p-3 rounded-lg bg-white dark:bg-zinc-900 text-gray-900 dark:text-white placeholder:text-gray-400 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-primary focus:outline-none transition-all"
                         placeholder="9876543210"
+                        required
                     />
                 </div>
                 <div>

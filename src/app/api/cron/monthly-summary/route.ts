@@ -17,7 +17,7 @@ export async function GET(req: Request) {
 
     try {
         // Logic to calculate monthly summary for all owners
-        const owners = await User.find({ role: { $in: ['super_admin', 'owner'] } });
+        const owners = await User.find({ role: { $in: ['super_admin', 'SUPER_ADMIN', 'owner', 'PROPERTY_OWNER'] } });
 
         // In a real app, we would use a library like 'nodemailer' to send emails.
         // For this demo, we will log the summaries to the console (simulating email sending).

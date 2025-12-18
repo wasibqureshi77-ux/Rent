@@ -3,19 +3,23 @@
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Save } from 'lucide-react';
+import { useSession } from 'next-auth/react';
 
 export default function SettingsPage() {
-    const { register, handleSubmit, setValue } = useForm();
+    const { register, handleSubmit, setValue, watch } = useForm();
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
+    const upiQrCode = watch('upiQrCode');
 
     useEffect(() => {
+        // Fetch property owner settings
         fetch('/api/settings')
             .then(res => res.json())
             .then(data => {
                 setValue('fixedWaterBill', data.fixedWaterBill);
                 setValue('electricityRatePerUnit', data.electricityRatePerUnit);
                 setValue('currency', data.currency || 'INR');
+                setValue('upiQrCode', data.upiQrCode);
             });
     }, [setValue]);
 
@@ -29,6 +33,7 @@ export default function SettingsPage() {
                 body: JSON.stringify(data),
             });
             if (!res.ok) throw new Error('Failed to update');
+
             setMessage('Settings saved successfully!');
         } catch (err) {
             setMessage('Error saving settings.');
@@ -81,10 +86,64 @@ export default function SettingsPage() {
                                 placeholder="INR"
                             />
                         </div>
+
+                        <div className="md:col-span-2 border-t border-gray-100 dark:border-gray-800 pt-6 mt-2">
+                            <label className="block text-sm font-medium mb-3">UPI Payment QR Code</label>
+                            <div className="flex items-center gap-6">
+                                <div className="w-32 h-32 bg-gray-50 dark:bg-zinc-900 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl flex items-center justify-center overflow-hidden relative group">
+                                    {upiQrCode ? (
+                                        <img src={upiQrCode} alt="UPI QR Code Preview" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <span className="text-gray-400 text-xs text-center p-2">No QR Code uploaded</span>
+                                    )}
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-sm text-gray-500 mb-2">Upload your UPI QR code so tenants can scan and pay directly.</p>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={async (e) => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+
+                                            const formData = new FormData();
+                                            formData.append('file', file);
+
+                                            try {
+                                                const res = await fetch('/api/settings/upload-qr', {
+                                                    method: 'POST',
+                                                    body: formData
+                                                });
+
+                                                if (res.ok) {
+                                                    const data = await res.json();
+                                                    setValue('upiQrCode', data.url, { shouldDirty: true });
+                                                } else {
+                                                    const errorData = await res.json();
+                                                    console.error('Upload failed:', errorData.message);
+                                                    alert(`Upload failed: ${errorData.message}`);
+                                                }
+                                            } catch (err) {
+                                                console.error('Upload error:', err);
+                                                alert('Upload failed due to network or server error.');
+                                            }
+                                        }}
+                                        className="block w-full text-sm text-gray-500
+                                            file:mr-4 file:py-2 file:px-4
+                                            file:rounded-full file:border-0
+                                            file:text-xs file:font-semibold
+                                            file:bg-primary file:text-white
+                                            hover:file:bg-orange-600
+                                        "
+                                    />
+                                    <input type="hidden" {...register('upiQrCode')} />
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     {message && (
-                        <div className={`p-3 rounded-md text-sm ${message.includes('Error') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                        <div className={`p-3 rounded-md text-sm text-center ${message.includes('Error') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
                             {message}
                         </div>
                     )}

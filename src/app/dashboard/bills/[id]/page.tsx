@@ -3,8 +3,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import connectDB from '@/lib/db';
 import MonthlyBill from '@/models/MonthlyBill';
+import User from '@/models/User';
 import PrintButton from '@/components/common/PrintButton';
 import BillActions from '@/components/bills/BillActions';
+import CollectPaymentButton from '@/components/bills/CollectPaymentButton';
 
 // Ensure models are registered
 import '@/models/Tenant';
@@ -16,8 +18,42 @@ export default async function BillDetailsPage({ params }: { params: Promise<{ id
     await connectDB();
     const bill = await MonthlyBill.findById(id)
         .populate('tenantId', 'fullName roomNumber')
-        .populate('propertyId', 'name address')
+        .populate('propertyId', 'name address ownerId')
         .lean();
+
+    if (!bill) {
+        notFound();
+    }
+
+    // Fetch the property owner to get the UPI QR Code
+    // Assuming propertyId has an ownerId or we can find the owner via property association
+    // In our schema, Property has `userId`? Let's check.
+    // Actually, checking standard schema: Property usually has `owner` or `userId`.
+    // Let's assume Property model has `userId` which refers to the User (Owner).
+    // Let's populate the owner from property if possible, or just fetch separate.
+    // Wait, typical schema: property -> user (via userId). 
+    // bill.propertyId is populated with name/address. Let's fetch full property to get user ID?
+    // Optimization: Access `bill.propertyId._id` -> find Property -> get user.
+    // But `bill.propertyId` is already an object here. If `userId` was not selected in populate, we miss it.
+    // Let's update the populate above.
+
+    const propertyOwner = await User.findOne({ _id: (bill as any).propertyId?.userId || (bill as any).userId });
+    // Wait, bill usually has propertyId. Property has userId. 
+    // Let's re-fetch or assume logic.
+    // Actually, MonthlyBill doesn't have owner directly. 
+    // Let's rely on the property relation.
+    // We need to know the schema of Property. 
+
+    // For now, let's try to fetch the User assuming the logged in user is the owner (dashboard view) OR
+    // we fetch the owner of the property associated with the bill.
+    // To be safe, let's fetch the property's owner.
+
+    // Simplification: We need the UPI QR of the *Property Owner*.
+    // If the Property schema has `owner` or `userId`:
+    // We already populated propertyId. Let's add 'userId' to the selection.
+
+    // NOTE: I cannot change the populate line in this replacement cleanly without reading the whole file or being precise. 
+    // I will replace the imports and the data fetching start.
 
     if (!bill) {
         notFound();
@@ -40,6 +76,32 @@ export default async function BillDetailsPage({ params }: { params: Promise<{ id
     // Because 'bill' is a plain object from lean(), we can access properties.
     const b: any = bill;
 
+    // Fetch property owner to ensure we satisfy any schema (using propertyId.owner or propertyId.userId commonly)
+    // We already added 'ownerId' to populate in previous step, but let's be robust.
+    // If we didn't populate 'userId' specifically, we might miss it.
+    // Let's assume standard Property schema uses 'userId' for the owner.
+    // We need to re-fetch the user details safely.
+    const propertyId = b.propertyId?._id;
+    let upiQrCode = undefined;
+
+    if (propertyId) {
+        // We can just query User who owns this property. 
+        // Depending on schema, it might be easier to just look up the Property again to get the userId if missing.
+        // However, we can also guess if the current user session is the owner, but this is a server comp.
+        // Let's rely on finding the User via the Property document if we had it.
+        // Actually, let's just use `User` to find the one who has this property in `properties` array if that existed? No.
+        // Backwards: Property -> userId.
+        // Let's fetch the Property specifically to be sure.
+        const { default: Property } = await import('@/models/Property');
+        const property = await Property.findById(propertyId).lean();
+        if (property && property.ownerId) {
+            const owner = await User.findById(property.ownerId).lean();
+            if (owner && owner.settings && owner.settings.upiQrCode) {
+                upiQrCode = owner.settings.upiQrCode;
+            }
+        }
+    }
+
     return (
         <div className="max-w-4xl mx-auto space-y-6 print:p-0 print:max-w-none">
             {/* Header / Navigation */}
@@ -50,7 +112,16 @@ export default async function BillDetailsPage({ params }: { params: Promise<{ id
                     </Link>
                     <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">Bill Details</h1>
                 </div>
-                <PrintButton />
+                <div className="flex items-center gap-3">
+                    <CollectPaymentButton
+                        billId={id}
+                        totalAmount={b.amounts?.totalAmount || 0}
+                        paidAmount={b.amounts?.paidAmount || 0}
+                        status={b.status}
+                        upiQrCode={upiQrCode}
+                    />
+                    <PrintButton />
+                </div>
             </div>
 
             {/* Bill Content - Printable Area */}
@@ -91,8 +162,8 @@ export default async function BillDetailsPage({ params }: { params: Promise<{ id
 
                         {/* Static Badge (Visible ONLY in Print) */}
                         <div className={`hidden print:inline-block px-4 py-2 rounded-lg font-bold border-2 ${b.status === 'PAID' ? 'border-green-500 text-green-600 bg-green-50' :
-                                b.status === 'PARTIAL' ? 'border-yellow-500 text-yellow-600 bg-yellow-50' :
-                                    'border-red-500 text-red-600 bg-red-50'
+                            b.status === 'PARTIAL' ? 'border-yellow-500 text-yellow-600 bg-yellow-50' :
+                                'border-red-500 text-red-600 bg-red-50'
                             }`}>
                             {b.status}
                         </div>

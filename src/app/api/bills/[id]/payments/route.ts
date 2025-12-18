@@ -20,7 +20,9 @@ export async function POST(
         await connectDB();
         const { id } = await params;
         const body = await req.json();
-        const { amount, mode, note } = body;
+        const { amount, method } = body;
+        const mode = method || 'Cash';
+        const note = '';
 
         if (!amount || amount <= 0) {
             return NextResponse.json({

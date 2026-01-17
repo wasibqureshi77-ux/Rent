@@ -16,6 +16,8 @@ export default function SuperAdminSettingsPage() {
             .then(res => res.json())
             .then(data => {
                 setValue('monthlyPlatformFee', data.monthlyPlatformFee);
+                setValue('razorpayKeyId', data.razorpayKeyId);
+                setValue('razorpayKeySecret', data.razorpayKeySecret);
             });
     }, [setValue]);
 
@@ -26,7 +28,11 @@ export default function SuperAdminSettingsPage() {
             const res = await fetch('/api/admin/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ monthlyPlatformFee: data.monthlyPlatformFee }),
+                body: JSON.stringify({
+                    monthlyPlatformFee: data.monthlyPlatformFee,
+                    razorpayKeyId: data.razorpayKeyId,
+                    razorpayKeySecret: data.razorpayKeySecret
+                }),
             });
 
             if (!res.ok) throw new Error('Failed to save');
@@ -50,8 +56,8 @@ export default function SuperAdminSettingsPage() {
             </div>
 
             <div className="bg-white dark:bg-card p-8 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
-                <h2 className="text-lg font-semibold mb-6">Platform Fees</h2>
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                    <h2 className="text-lg font-semibold border-b pb-2">Platform Fees</h2>
                     <div>
                         <label className="block text-sm font-medium mb-1">Monthly Platform Fee (for Property Owners)</label>
                         <div className="relative">
@@ -62,7 +68,29 @@ export default function SuperAdminSettingsPage() {
                                 className="w-full pl-8 p-3 rounded-lg bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-primary focus:outline-none"
                             />
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">Property owners will be prompted to pay this amount 30 days after their approval.</p>
+                        <p className="text-xs text-gray-500 mt-1">Property owners will be prompted to pay this amount monthly.</p>
+                    </div>
+
+                    <h2 className="text-lg font-semibold border-b pb-2 pt-4">Razorpay Configuration</h2>
+                    <div className="grid grid-cols-1 gap-6">
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Razorpay Key ID</label>
+                            <input
+                                type="text"
+                                {...register('razorpayKeyId')}
+                                placeholder="rzp_test_..."
+                                className="w-full p-3 rounded-lg bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-primary focus:outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Razorpay Key Secret</label>
+                            <input
+                                type="password"
+                                {...register('razorpayKeySecret')}
+                                placeholder="••••••••••••••••"
+                                className="w-full p-3 rounded-lg bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-primary focus:outline-none"
+                            />
+                        </div>
                     </div>
 
                     {message && (
@@ -74,7 +102,7 @@ export default function SuperAdminSettingsPage() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="inline-flex items-center justify-center rounded-lg bg-primary px-8 py-3 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 transition-all disabled:opacity-50"
+                        className="inline-flex items-center justify-center w-full md:w-auto rounded-lg bg-primary px-8 py-3 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 transition-all disabled:opacity-50"
                     >
                         <Save className="h-4 w-4 mr-2" />
                         {loading ? 'Saving...' : 'Save Configuration'}

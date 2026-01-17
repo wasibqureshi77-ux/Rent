@@ -14,9 +14,8 @@ export async function GET(req: Request) {
 
     if (!user) return NextResponse.json({ message: 'User not found' }, { status: 404 });
 
-    // Logic: If user is tenant or super admin, skip?
-    // Assume tenants don't pay platform fee, only owners (PROPERTY_OWNER)
-    if (user.role === 'SUPER_ADMIN' || user.role === 'super_admin') {
+    // Logic: If user is tenant or super admin, skip
+    if (user.role === 'SUPER_ADMIN') {
         return NextResponse.json({ isOverdue: false });
     }
 
@@ -31,15 +30,58 @@ export async function GET(req: Request) {
     let isOverdue = false;
     let fee = 0;
 
-    if (user.subscription?.nextBillingDate) {
-        if (new Date(user.subscription.nextBillingDate) < today) {
-            isOverdue = true;
+    // 1. Check if manually marked as OVERDUE
+    if (user.status === 'OVERDUE' || user.subscription?.status === 'OVERDUE') {
+        isOverdue = true;
+    }
 
-            // Fetch global fee
-            const settings = await SystemSetting.findOne({ key: 'global_config' });
-            fee = settings?.monthlyPlatformFee || 0;
+    // 2. Check if expired based on date
+    const now = new Date();
+    const nextBillingDate = user.subscription?.nextBillingDate;
+
+    if (nextBillingDate) {
+        if (new Date(nextBillingDate) < now) {
+            isOverdue = true;
+        }
+    } else {
+        // FALLBACK: If missing date (old users), assume 30 days from creation
+        const trialEndDate = new Date(user.createdAt);
+        trialEndDate.setDate(trialEndDate.getDate() + 30);
+
+        if (trialEndDate < now) {
+            isOverdue = true;
+            // Also update the database so we have a date now
+            await User.findByIdAndUpdate(user._id, {
+                'subscription.nextBillingDate': trialEndDate,
+                'subscription.status': 'OVERDUE'
+            });
         }
     }
 
-    return NextResponse.json({ isOverdue, fee });
+    let razorpayKeyId = '';
+
+    const settings = await SystemSetting.findOne({ key: 'global_config' });
+    console.log('[DEBUG] Subscription Status Check:', {
+        email: user.email,
+        isOverdue,
+        fee,
+        dbKeyId: settings?.razorpayKeyId ? 'EXISTS' : 'EMPTY',
+        globalFee: settings?.monthlyPlatformFee
+    });
+
+    if (isOverdue) {
+        // Fetch fee (use user's specific plan amount if set, else global)
+        fee = user.subscription?.planAmount || 0;
+
+        if (fee === 0) {
+            fee = settings?.monthlyPlatformFee || 500; // Fallback to 500 if nothing set
+        }
+        razorpayKeyId = settings?.razorpayKeyId || '';
+    }
+
+    return NextResponse.json({
+        isOverdue,
+        fee,
+        razorpayKeyId: settings?.razorpayKeyId || ''
+    });
 }

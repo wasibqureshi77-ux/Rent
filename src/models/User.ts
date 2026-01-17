@@ -11,12 +11,14 @@ const UserSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['PENDING_EMAIL_VERIFICATION', 'PENDING_APPROVAL', 'ACTIVE', 'REJECTED', 'SUSPENDED'],
+        enum: ['PENDING_EMAIL_VERIFICATION', 'PENDING_APPROVAL', 'ACTIVE', 'REJECTED', 'SUSPENDED', 'OVERDUE'],
         default: 'PENDING_EMAIL_VERIFICATION'
     },
     emailVerifiedAt: { type: Date },
     verificationToken: { type: String },
     verificationTokenExpiry: { type: Date },
+    resetPasswordToken: { type: String },
+    resetPasswordExpires: { type: Date },
     themePreference: {
         type: String,
         enum: ['light', 'dark', 'system'],
@@ -38,4 +40,10 @@ const UserSchema = new mongoose.Schema({
     },
 }, { timestamps: true });
 
-export default mongoose.models.User || mongoose.model('User', UserSchema);
+// Force clear the model from cache to ensure schema updates are recognized
+if (mongoose.models.User) {
+    delete (mongoose.models as any).User;
+}
+
+const User = mongoose.model('User', UserSchema);
+export default User;

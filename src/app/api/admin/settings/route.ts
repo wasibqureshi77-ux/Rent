@@ -12,7 +12,8 @@ export async function GET(req: Request) {
 
     await connectDB();
     const settings = await SystemSetting.findOne({ key: 'global_config' });
-    return NextResponse.json(settings || { monthlyPlatformFee: 0 });
+    console.log('[DEBUG] Admin Settings Fetched:', settings);
+    return NextResponse.json(settings || { monthlyPlatformFee: 0, razorpayKeyId: '', razorpayKeySecret: '' });
 }
 
 export async function POST(req: Request) {
@@ -22,11 +23,20 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
+    console.log('[DEBUG] Saving Admin Settings - Incoming:', {
+        monthlyPlatformFee: body.monthlyPlatformFee,
+        razorpayKeyId: body.razorpayKeyId ? 'EXISTS(HIDDEN)' : 'EMPTY',
+        razorpayKeySecret: body.razorpayKeySecret ? 'EXISTS(HIDDEN)' : 'EMPTY'
+    });
     await connectDB();
 
     const settings = await SystemSetting.findOneAndUpdate(
         { key: 'global_config' },
-        { monthlyPlatformFee: body.monthlyPlatformFee },
+        {
+            monthlyPlatformFee: body.monthlyPlatformFee,
+            razorpayKeyId: body.razorpayKeyId,
+            razorpayKeySecret: body.razorpayKeySecret
+        },
         { upsert: true, new: true }
     );
 

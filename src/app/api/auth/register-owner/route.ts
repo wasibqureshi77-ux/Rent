@@ -62,6 +62,11 @@ export async function POST(req: Request) {
             themePreference: 'system',
             settings: {
                 currency: 'INR'
+            },
+            subscription: {
+                status: isFirstUser ? 'ACTIVE' : 'ACTIVE', // Initial active for trial
+                nextBillingDate: isFirstUser ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 day trial
+                planAmount: 0
             }
         });
 

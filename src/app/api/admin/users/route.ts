@@ -26,7 +26,13 @@ export async function GET(req: Request) {
             isVerified: user.status !== 'PENDING_EMAIL_VERIFICATION',
             createdAt: user.createdAt,
             status: user.status,
-            propertyName: user.propertyName
+            propertyName: user.propertyName,
+            subscription: user.subscription || {
+                status: 'INACTIVE',
+                nextBillingDate: null,
+                lastPaymentDate: null,
+                planAmount: 0
+            }
         }));
 
         return NextResponse.json(mappedUsers);
@@ -70,8 +76,12 @@ export async function PATCH(req: Request) {
 
         const user = await User.findByIdAndUpdate(userId, updateData, { new: true });
 
+        if (!user) {
+            return NextResponse.json({ message: 'User not found' }, { status: 404 });
+        }
+
         // Send approval notification email if user is being approved
-        if (isApproved && user) {
+        if (isApproved) {
             const { sendApprovalNotificationEmail } = await import('@/lib/email');
             await sendApprovalNotificationEmail(user.email, user.name);
         }
@@ -100,7 +110,7 @@ export async function PUT(req: Request) {
 
     try {
         const body = await req.json();
-        const { userId, name, email, propertyName, password, phone } = body;
+        const { userId, name, email, propertyName, password, phone, subscription } = body;
 
         if (!userId || !name || !email) {
             return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
@@ -116,6 +126,22 @@ export async function PUT(req: Request) {
         user.email = email;
         user.propertyName = propertyName;
         user.phone = phone;
+
+        // Update subscription fields if provided
+        if (subscription) {
+            user.subscription = {
+                ...user.subscription,
+                status: subscription.status || user.subscription?.status || 'INACTIVE',
+                nextBillingDate: subscription.nextBillingDate ? new Date(subscription.nextBillingDate) : user.subscription?.nextBillingDate,
+                planAmount: subscription.planAmount !== undefined ? subscription.planAmount : user.subscription?.planAmount,
+                lastPaymentDate: subscription.lastPaymentDate ? new Date(subscription.lastPaymentDate) : user.subscription?.lastPaymentDate
+            };
+
+            // If subscription is OVERDUE or INACTIVE, we might want to change user status too
+            if (subscription.status === 'OVERDUE' || subscription.status === 'INACTIVE') {
+                // But we usually keep status ACTIVE and block via middleware/auth
+            }
+        }
 
         // Update password if provided
         if (password && password.trim() !== '') {
@@ -133,7 +159,8 @@ export async function PUT(req: Request) {
             phone: user.phone,
             isApproved: user.status === 'ACTIVE',
             isVerified: user.status !== 'PENDING_EMAIL_VERIFICATION',
-            createdAt: user.createdAt
+            createdAt: user.createdAt,
+            subscription: user.subscription
         });
     } catch (error) {
         console.error('Error updating user details:', error);

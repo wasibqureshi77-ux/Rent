@@ -78,11 +78,6 @@ export const authOptions: NextAuthOptions = {
                 }
 
                 // Check user status
-                // Allow login for PENDING_EMAIL_VERIFICATION to show verification screen
-                // if (user.status === 'PENDING_EMAIL_VERIFICATION') {
-                //     throw new Error('Please verify your email address. Check your inbox for the verification link.');
-                // }
-
                 if (user.status === 'PENDING_APPROVAL') {
                     throw new Error('Your account is awaiting admin approval. You will be notified once approved.');
                 }
@@ -95,9 +90,42 @@ export const authOptions: NextAuthOptions = {
                     throw new Error('Your account has been suspended. Please contact support.');
                 }
 
+                // Check Subscription Status (Only for Property Owners)
+                if (user.role === 'PROPERTY_OWNER') {
+                    const now = new Date();
+                    const nextBilling = user.subscription?.nextBillingDate ? new Date(user.subscription.nextBillingDate) : null;
+                    const isOverdue = user.subscription?.status === 'OVERDUE';
+                    const isExpired = nextBilling && nextBilling < now;
+
+                    if (isOverdue || isExpired) {
+                        // Automatically update status in DB if expired but not marked
+                        if (isExpired && user.subscription?.status !== 'OVERDUE') {
+                            await User.findByIdAndUpdate(user._id, { 'subscription.status': 'OVERDUE' });
+                        }
+                        // We NO LONGER throw error here, allowing them to login to see the payment popup
+                    }
+                }
+
                 // For other statuses (e.g. DELETED), block access
                 if (user.status !== 'ACTIVE' && user.status !== 'PENDING_EMAIL_VERIFICATION') {
                     throw new Error('Account is not active. Please contact support.');
+                }
+
+                // Determine final status for session
+                let finalStatus = user.status;
+                if (user.role === 'PROPERTY_OWNER') {
+                    const now = new Date();
+                    const nextBilling = user.subscription?.nextBillingDate ? new Date(user.subscription.nextBillingDate) : null;
+                    const isOverdue = user.subscription?.status === 'OVERDUE';
+                    const isExpired = nextBilling && nextBilling < now;
+
+                    if (isOverdue || isExpired) {
+                        finalStatus = 'OVERDUE';
+                        // Keep DB updated
+                        if (isExpired && user.subscription?.status !== 'OVERDUE') {
+                            await User.findByIdAndUpdate(user._id, { 'subscription.status': 'OVERDUE' });
+                        }
+                    }
                 }
 
                 return {
@@ -105,7 +133,7 @@ export const authOptions: NextAuthOptions = {
                     name: user.name,
                     email: user.email,
                     role: user.role,
-                    status: user.status,
+                    status: finalStatus,
                     themePreference: user.themePreference,
                 };
             }
@@ -145,9 +173,27 @@ export const authOptions: NextAuthOptions = {
                         await connectDB();
                         // Verify format to prevent BSON errors
                         if (token.id.match(/^[0-9a-fA-F]{24}$/)) {
-                            const freshUser = await User.findById(token.id).select('status');
+                            const freshUser = await User.findById(token.id).select('status role subscription email');
                             if (freshUser) {
-                                session.user.status = freshUser.status;
+                                let currentStatus = freshUser.status;
+
+                                // Check subscription expiration in session
+                                if (freshUser.role === 'PROPERTY_OWNER') {
+                                    const now = new Date();
+                                    const nextBilling = freshUser.subscription?.nextBillingDate ? new Date(freshUser.subscription.nextBillingDate) : null;
+
+                                    console.log(`[AUTH DEBUG] User: ${freshUser.email}`);
+                                    console.log(`[AUTH DEBUG] Status: ${freshUser.status}`);
+                                    console.log(`[AUTH DEBUG] Next Billing: ${nextBilling}`);
+                                    console.log(`[AUTH DEBUG] Is Expired: ${nextBilling && nextBilling < now}`);
+
+                                    if ((freshUser.subscription?.status === 'OVERDUE') || (nextBilling && nextBilling < now)) {
+                                        currentStatus = 'OVERDUE';
+                                    }
+                                }
+
+                                session.user.status = currentStatus;
+                                console.log(`[AUTH DEBUG] Final Session Status: ${currentStatus}`);
                             } else {
                                 session.user.status = token.status as string;
                             }

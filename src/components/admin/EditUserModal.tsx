@@ -9,6 +9,12 @@ interface User {
     email: string;
     propertyName?: string;
     phone?: string;
+    subscription?: {
+        status: 'ACTIVE' | 'INACTIVE' | 'OVERDUE';
+        nextBillingDate: string | null;
+        lastPaymentDate: string | null;
+        planAmount: number;
+    };
 }
 
 interface EditUserModalProps {
@@ -26,6 +32,13 @@ export default function EditUserModal({ user, isOpen, onClose, onSuccess }: Edit
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
 
+    // Subscription states
+    const [subStatus, setSubStatus] = useState(user.subscription?.status || 'INACTIVE');
+    const [nextBillingDate, setNextBillingDate] = useState(
+        user.subscription?.nextBillingDate ? new Date(user.subscription.nextBillingDate).toISOString().split('T')[0] : ''
+    );
+    const [planAmount, setPlanAmount] = useState(user.subscription?.planAmount || 0);
+
     if (!isOpen) return null;
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -42,7 +55,12 @@ export default function EditUserModal({ user, isOpen, onClose, onSuccess }: Edit
                     email,
                     propertyName,
                     phone,
-                    password: password || undefined
+                    password: password || undefined,
+                    subscription: {
+                        status: subStatus,
+                        nextBillingDate: nextBillingDate || null,
+                        planAmount: Number(planAmount)
+                    }
                 })
             });
 
@@ -115,6 +133,71 @@ export default function EditUserModal({ user, isOpen, onClose, onSuccess }: Edit
                             placeholder="e.g. Sunshine PG"
                             className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-950 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:outline-none"
                         />
+                    </div>
+
+                    <div className="pt-4 border-t border-gray-100 dark:border-zinc-800 space-y-4">
+                        <h3 className="text-sm font-bold text-primary uppercase tracking-wider">Subscription Management</h3>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Subscription Status</label>
+                                <select
+                                    value={subStatus}
+                                    onChange={(e) => setSubStatus(e.target.value as any)}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-950 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:outline-none"
+                                >
+                                    <option value="ACTIVE">Active</option>
+                                    <option value="OVERDUE">Overdue (Blocked)</option>
+                                    <option value="INACTIVE">Inactive</option>
+                                </select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Plan Amount (Monthly)</label>
+                                <input
+                                    type="number"
+                                    value={planAmount}
+                                    onChange={(e) => setPlanAmount(Number(e.target.value))}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-950 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Subscription Expiry (Next Billing Date)</label>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const d = new Date(nextBillingDate || Date.now());
+                                            d.setMonth(d.getMonth() + 1);
+                                            setNextBillingDate(d.toISOString().split('T')[0]);
+                                        }}
+                                        className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded hover:bg-primary/20 transition-colors"
+                                    >
+                                        +1 Month
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const d = new Date(nextBillingDate || Date.now());
+                                            d.setFullYear(d.getFullYear() + 1);
+                                            setNextBillingDate(d.toISOString().split('T')[0]);
+                                        }}
+                                        className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded hover:bg-primary/20 transition-colors"
+                                    >
+                                        +1 Year
+                                    </button>
+                                </div>
+                            </div>
+                            <input
+                                type="date"
+                                value={nextBillingDate}
+                                onChange={(e) => setNextBillingDate(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-950 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:outline-none"
+                            />
+                        </div>
                     </div>
 
                     <div className="pt-2 border-t border-gray-100 dark:border-zinc-800 mt-2">

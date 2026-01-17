@@ -83,3 +83,37 @@ export async function sendApprovalNotificationEmail(email: string, name: string)
         return false;
     }
 }
+
+export async function sendPasswordResetEmail(email: string, token: string, name: string) {
+    const resetUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/reset-password?token=${token}`;
+    const from = process.env.EMAIL_FROM || 'noreply@example.com';
+
+    console.log(`Sending password reset email to ${email}`);
+
+    try {
+        await transporter.sendMail({
+            from,
+            to: email,
+            subject: 'Reset your password for PG Manage',
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2>Reset Your Password</h2>
+                    <p>Hi ${name},</p>
+                    <p>We received a request to reset your password. Click the button below to set a new password:</p>
+                    <p>
+                        <a href="${resetUrl}" style="background-color: #f97316; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a>
+                    </p>
+                    <p>Or use this link:</p>
+                    <p><a href="${resetUrl}">${resetUrl}</a></p>
+                    <p>This link will expire in 1 hour.</p>
+                    <p>If you didn't request a password reset, you can safely ignore this email.</p>
+                </div>
+            `,
+        });
+        console.log('Password reset email sent successfully');
+        return true;
+    } catch (error) {
+        console.error('Error sending password reset email:', error);
+        return false;
+    }
+}

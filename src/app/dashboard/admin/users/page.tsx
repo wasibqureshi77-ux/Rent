@@ -14,6 +14,12 @@ interface User {
     createdAt: string;
     propertyName?: string;
     phone?: string;
+    subscription?: {
+        status: 'ACTIVE' | 'INACTIVE' | 'OVERDUE';
+        nextBillingDate: string | null;
+        lastPaymentDate: string | null;
+        planAmount: number;
+    };
 }
 
 export default function AdminUsersPage() {

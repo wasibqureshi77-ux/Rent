@@ -29,7 +29,7 @@ export async function POST(req: Request) {
         }
 
         const now = new Date();
-        if (user.resetPasswordExpires < now) {
+        if (!user.resetPasswordExpires || user.resetPasswordExpires < now) {
             console.log('FAILED: Token has expired');
             console.log('Expires at:', user.resetPasswordExpires);
             console.log('Current time:', now);

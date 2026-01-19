@@ -64,10 +64,10 @@ export async function POST(req: Request) {
 
                     console.log('QR Code detected. Cropping...', { left, top, width, height });
 
-                    buffer = await sharp(buffer)
+                    buffer = await (sharp(buffer)
                         .extract({ left, top, width, height })
                         .toFormat('png')
-                        .toBuffer();
+                        .toBuffer() as any);
 
                     // Update filename to png
                     processed = true;

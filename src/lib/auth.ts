@@ -112,7 +112,7 @@ export const authOptions: NextAuthOptions = {
                 }
 
                 // Determine final status for session
-                let finalStatus = user.status;
+                let finalStatus: string = user.status;
                 if (user.role === 'PROPERTY_OWNER') {
                     const now = new Date();
                     const nextBilling = user.subscription?.nextBillingDate ? new Date(user.subscription.nextBillingDate) : null;

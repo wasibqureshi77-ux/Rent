@@ -26,6 +26,12 @@ const MonthlyBillSchema = new mongoose.Schema({
         required: true,
         index: true
     },
+    roomId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Room',
+        required: true,
+        index: true
+    },
     month: {
         type: Number,
         required: true,

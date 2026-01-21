@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Users, Zap, FileText, Settings, LogOut, Shield, Building2, FilePlus, X, Menu as Logs } from 'lucide-react';
+import { Home, Users, Zap, FileText, Settings, LogOut, Shield, Building2, FilePlus, X, Menu as Logs, DoorOpen } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import ThemeToggle from '@/components/ui/ThemeToggle';
@@ -11,8 +11,9 @@ import ThemeToggle from '@/components/ui/ThemeToggle';
 const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Properties', href: '/dashboard/properties', icon: Building2 },
-    { name: 'Rooms', href: '/dashboard/rooms', icon: Zap },
+    { name: 'Rooms', href: '/dashboard/rooms', icon: DoorOpen },
     { name: 'Tenants', href: '/dashboard/tenants', icon: Users },
+    { name: 'Meter Readings', href: '/dashboard/readings', icon: Zap },
     { name: 'Generate Bill', href: '/dashboard/bills/generate', icon: FilePlus },
     { name: 'Bills', href: '/dashboard/bills', icon: FileText },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings },

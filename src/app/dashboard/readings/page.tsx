@@ -7,24 +7,33 @@ import { format } from 'date-fns';
 
 interface Reading {
     _id: string;
-    tenantId: { name: string; roomNo: string };
+    tenantId: { fullName: string; roomNumber: string };
     readingDate: string;
     value: number;
+    previousValue: number;
     unitsConsumed: number;
 }
 
 export default function ReadingsPage() {
     const [readings, setReadings] = useState<Reading[]>([]);
     const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState('');
 
     useEffect(() => {
-        fetch('/api/readings')
+        fetch('/api/readings', { cache: 'no-store' })
             .then((res) => res.json())
             .then((data) => {
                 setReadings(data);
                 setLoading(false);
             });
     }, []);
+
+    const filteredReadings = readings.filter((reading) => {
+        const fullName = reading.tenantId?.fullName?.toLowerCase() || '';
+        const roomNumber = reading.tenantId?.roomNumber?.toLowerCase() || '';
+        const searchLower = search.toLowerCase();
+        return fullName.includes(searchLower) || roomNumber.includes(searchLower);
+    });
 
     return (
         <div className="space-y-6">
@@ -41,6 +50,17 @@ export default function ReadingsPage() {
                 </Link>
             </div>
 
+            <div className="flex items-center px-4 py-2 bg-white dark:bg-card border border-gray-200 dark:border-gray-800 rounded-lg shadow-sm">
+                <Search className="h-5 w-5 text-gray-400 mr-2" />
+                <input
+                    type="text"
+                    placeholder="Search by tenant name or room number..."
+                    className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-sm py-1"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                />
+            </div>
+
             <div className="bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
@@ -48,17 +68,18 @@ export default function ReadingsPage() {
                             <tr>
                                 <th className="px-6 py-4">Date</th>
                                 <th className="px-6 py-4">Tenant / Room</th>
-                                <th className="px-6 py-4">Reading (Units)</th>
-                                <th className="px-6 py-4">Consumed</th>
+                                <th className="px-6 py-4 text-center">Old Reading</th>
+                                <th className="px-6 py-4 text-center">New Reading</th>
+                                <th className="px-6 py-4 text-center">Consumed</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={4} className="text-center py-6">Loading...</td></tr>
-                            ) : readings.length === 0 ? (
-                                <tr><td colSpan={4} className="text-center py-6 text-gray-500">No readings found.</td></tr>
+                                <tr><td colSpan={5} className="text-center py-6">Loading...</td></tr>
+                            ) : filteredReadings.length === 0 ? (
+                                <tr><td colSpan={5} className="text-center py-6 text-gray-500">No readings found.</td></tr>
                             ) : (
-                                readings.map((reading) => (
+                                filteredReadings.map((reading) => (
                                     <tr key={reading._id} className="bg-white dark:bg-card hover:bg-gray-50 dark:hover:bg-zinc-900/50 border-b border-gray-100 dark:border-gray-800 last:border-0 transition-colors">
                                         <td className="px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap">
                                             <div className="flex items-center gap-2">
@@ -67,14 +88,19 @@ export default function ReadingsPage() {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <div className="font-semibold text-gray-900 dark:text-white">{reading.tenantId?.name || 'Unknown'}</div>
-                                            <div className="text-xs text-gray-500">Room {reading.tenantId?.roomNo}</div>
+                                            <div className="font-semibold text-gray-900 dark:text-white">{reading.tenantId?.fullName || 'Unknown'}</div>
+                                            <div className="text-xs text-gray-500">Room {reading.tenantId?.roomNumber}</div>
                                         </td>
-                                        <td className="px-6 py-4 font-mono text-gray-700 dark:text-gray-300">
+                                        <td className="px-6 py-4 font-mono text-gray-500 text-center">
+                                            {reading.previousValue !== undefined && reading.previousValue !== null
+                                                ? reading.previousValue
+                                                : (reading.value - reading.unitsConsumed)}
+                                        </td>
+                                        <td className="px-6 py-4 font-mono text-gray-900 dark:text-white text-center">
                                             {reading.value}
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                                        <td className="px-6 py-4 text-center">
+                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
                                                 {reading.unitsConsumed} units
                                             </span>
                                         </td>

@@ -184,7 +184,8 @@ export default function AddTenantPage() {
                                     ...prev,
                                     roomId: selectedRoomId,
                                     roomNumber: selectedRoom ? selectedRoom.roomNumber : '', // Auto-fill room number text for display/legacy
-                                    meterReadingStart: selectedRoom?.currentMeterReading ? String(selectedRoom.currentMeterReading) : '' // Auto-fill meter
+                                    meterReadingStart: selectedRoom?.currentMeterReading ? String(selectedRoom.currentMeterReading) : '', // Auto-fill meter
+                                    baseRent: selectedRoom?.baseRent ? String(selectedRoom.baseRent) : prev.baseRent // Auto-fill rent
                                 }));
                             }}
                             required
@@ -200,7 +201,7 @@ export default function AddTenantPage() {
                                         disabled={!!room.currentTenantId}
                                         className={room.currentTenantId ? 'text-red-400' : 'text-green-600'}
                                     >
-                                        {room.roomNumber} (Floor {room.floorNumber}) {room.currentTenantId ? '- Occupied' : '- Vacant'}
+                                        {room.roomNumber} (Floor {room.floorNumber}) - ₹{room.baseRent || 0} {room.currentTenantId ? '- Occupied' : '- Vacant'}
                                     </option>
                                 ))
                             ) : (

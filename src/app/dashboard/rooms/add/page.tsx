@@ -116,6 +116,18 @@ export default function AddRoomPage() {
                         </div>
                     </div>
 
+                    <div>
+                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Monthly Rent (₹)</label>
+                        <input
+                            type="number"
+                            {...register('baseRent', { required: 'Room rent is required' })}
+                            placeholder="e.g. 15000"
+                            min="0"
+                            className="w-full p-3 rounded-lg bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-primary focus:outline-none transition-all font-bold text-lg"
+                        />
+                        {errors.baseRent && <p className="text-red-500 text-sm mt-1">{String(errors.baseRent.message)}</p>}
+                    </div>
+
                     {/* Current Meter Readings */}
                     {watch('type') === 'ROOM_KITCHEN' ? (
                         <div className="grid grid-cols-2 gap-6">

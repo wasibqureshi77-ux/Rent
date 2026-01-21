@@ -12,6 +12,10 @@ interface Bill {
     amounts: {
         totalAmount: number;
     };
+    payments: {
+        amountPaid: number;
+        remainingDue: number;
+    };
     status: string;
 }
 
@@ -51,15 +55,16 @@ export default function BillsPage() {
                                 <th className="px-6 py-4">Month</th>
                                 <th className="px-6 py-4">Tenant</th>
                                 <th className="px-6 py-4">Total Amount</th>
+                                <th className="px-6 py-4">Due</th>
                                 <th className="px-6 py-4">Status</th>
                                 <th className="px-6 py-4">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={5} className="text-center py-6">Loading...</td></tr>
+                                <tr><td colSpan={6} className="text-center py-6">Loading...</td></tr>
                             ) : bills.length === 0 ? (
-                                <tr><td colSpan={5} className="text-center py-6 text-gray-500">No bills generated yet.</td></tr>
+                                <tr><td colSpan={6} className="text-center py-6 text-gray-500">No bills generated yet.</td></tr>
                             ) : (
                                 bills.map((bill) => (
                                     <tr key={bill._id} className="bg-white dark:bg-card hover:bg-gray-50 dark:hover:bg-zinc-900/50 border-b border-gray-100 dark:border-gray-800 last:border-0 transition-colors">
@@ -77,10 +82,13 @@ export default function BillsPage() {
                                         <td className="px-6 py-4 font-mono font-bold">
                                             ₹ {bill.amounts?.totalAmount?.toLocaleString() || 0}
                                         </td>
+                                        <td className="px-6 py-4 font-mono font-bold text-red-500">
+                                            {bill.payments?.remainingDue > 0 ? `₹ ${bill.payments.remainingDue.toLocaleString()}` : '-'}
+                                        </td>
                                         <td className="px-6 py-4">
                                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${bill.status === 'PAID' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
-                                                    bill.status === 'PARTIAL' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
-                                                        'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                                bill.status === 'PARTIAL' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                                                    'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
                                                 }`}>
                                                 {bill.status}
                                             </span>

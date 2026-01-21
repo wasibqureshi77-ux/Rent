@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/db';
 import Tenant from '@/models/Tenant';
+import MeterReading from '@/models/MeterReading';
 import '@/models/Property';
 import MonthlyBill from '@/models/MonthlyBill';
 import Room from '@/models/Room';
@@ -117,28 +118,36 @@ export async function GET(req: Request) {
 
         const tenants = await Tenant.find(query)
             .populate('propertyId', 'name')
+            .populate('roomId')
             .sort({ createdAt: -1 });
 
         // Enhance tenants with dynamic stats
         const enhancedTenants = await Promise.all(tenants.map(async (tenant) => {
-            // 1. Get Latest Bill for Meter Reading
-            const latestBill = await MonthlyBill.findOne({ tenantId: tenant._id })
-                .sort({ year: -1, month: -1 });
+            // 1. Get Latest Reading from MeterReading collection (most accurate/recent since start date)
+            const latestReadingEntry = await MeterReading.findOne({
+                tenantId: tenant._id,
+                readingDate: { $gte: tenant.startDate }
+            }).sort({ readingDate: -1, createdAt: -1 });
 
-            const lastMeterReading = latestBill?.meter?.endUnits ?? tenant.meterReadingStart;
+            // 2. Get Latest Bill as fallback/secondary check
+            const latestBill = await MonthlyBill.findOne({
+                tenantId: tenant._id,
+                createdAt: { $gte: tenant.startDate }
+            }).sort({ year: -1, month: -1 });
 
-            // 2. Calculate Total Due
-            // Sum of (total - paid) for all bills that are not fully paid
+            const lastMeterReading = latestReadingEntry?.value ?? latestBill?.meter?.endUnits ?? tenant.meterReadingStart;
+
+            // 3. Calculate Total Due
+            // Sum of (total - paid) for all bills that are not fully paid since start date
             const unpaidBills = await MonthlyBill.find({
                 tenantId: tenant._id,
+                createdAt: { $gte: tenant.startDate },
                 status: { $in: ['PENDING', 'PARTIAL'] }
             });
 
             const totalDue = unpaidBills.reduce((sum: number, bill: any) => {
-                const total = bill.amounts?.totalAmount || 0;
-                const paid = bill.amounts?.paidAmount || 0;
-                // If bill is PARTIAL/PENDING, add remaining
-                return sum + (total - paid);
+                // Use the stored remainingDue from the payment object
+                return sum + (bill.payments?.remainingDue || 0);
             }, 0);
 
             // 3. Calculate Current Month Completion Date

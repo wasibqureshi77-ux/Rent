@@ -54,7 +54,8 @@ export async function POST(req: Request) {
             roomNumber,
             type: type || 'ROOM',
             currentMeterReading: body.currentMeterReading || 0,
-            currentKitchenMeterReading: body.currentKitchenMeterReading || 0
+            currentKitchenMeterReading: body.currentKitchenMeterReading || 0,
+            baseRent: body.baseRent || 0
         });
 
         // Check if there's already an active tenant for this room (backfill/sync)

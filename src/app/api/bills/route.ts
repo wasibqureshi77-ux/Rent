@@ -5,7 +5,10 @@ import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/db';
 import MonthlyBill from '@/models/MonthlyBill';
 import Tenant from '@/models/Tenant';
+import User from '@/models/User';
 import Settings from '@/models/Settings';
+import MeterReading from '@/models/MeterReading';
+import Room from '@/models/Room';
 
 // GET /api/bills - List bills with optional filters
 export async function GET(req: Request) {
@@ -81,15 +84,12 @@ export async function POST(req: Request) {
             }, { status: 400 });
         }
 
-        // Check if bill already exists check removed to allow multiple bills
-
-
         // Fetch tenant
         const tenantQuery: any = { _id: tenantId };
         if (session.user.role !== 'SUPER_ADMIN') {
             tenantQuery.ownerId = session.user.id;
         }
-        const tenant = await Tenant.findOne(tenantQuery);
+        const tenant = await Tenant.findOne(tenantQuery).populate('roomId');
 
         if (!tenant) {
             return NextResponse.json({
@@ -97,26 +97,24 @@ export async function POST(req: Request) {
             }, { status: 404 });
         }
 
-        // Fetch owner settings
-        let settings = await Settings.findOne({ ownerId: session.user.id });
-        if (!settings) {
-            // Create default settings if not exist
-            settings = await Settings.create({
-                ownerId: session.user.id,
-                ownerEmail: session.user.email || '',
-                defaultWaterCharge: 0,
-                defaultRatePerUnit: 0,
-                currency: 'INR'
-            });
+        // Fetch owner settings from User model
+        const user = await User.findById(session.user.id);
+        if (!user) {
+            return NextResponse.json({ message: 'Owner not found' }, { status: 404 });
         }
+
+        const settings = user.settings;
 
         // Calculate bill amounts
         const unitsConsumed = endUnits - startUnits;
-        const electricityAmount = unitsConsumed * settings.defaultRatePerUnit;
+        const electricityRate = settings?.electricityRatePerUnit || 0;
+        const electricityAmount = unitsConsumed * electricityRate;
 
         // Allow overrides from frontend (for pro-rata rent or custom water charge)
-        const waterCharge = body.waterCharge !== undefined ? Number(body.waterCharge) : settings.defaultWaterCharge;
-        const rentAmount = body.rentAmount !== undefined ? Number(body.rentAmount) : tenant.baseRent;
+        const waterCharge = body.waterCharge !== undefined ? Number(body.waterCharge) : (settings?.fixedWaterBill || 0);
+        const rentAmount = body.rentAmount !== undefined
+            ? Number(body.rentAmount)
+            : ((tenant.roomId as any)?.baseRent ?? tenant.baseRent);
 
         // Calculate previous dues from MonthlyBill history (Source of Truth)
         const previousBills = await MonthlyBill.find({
@@ -133,11 +131,10 @@ export async function POST(req: Request) {
         // Initial Payment Logic
         const collectedAmount = body.collectedAmount ? Number(body.collectedAmount) : 0;
         const paymentMode = body.paymentMode || 'CASH';
+        const settleBill = body.settleBill || false;
 
-        const remainingDue = totalAmount - collectedAmount;
+        let remainingDue = totalAmount - collectedAmount;
         let status = 'PENDING';
-        if (remainingDue <= 0 && collectedAmount > 0) status = 'PAID';
-        else if (collectedAmount > 0) status = 'PARTIAL';
 
         const paymentHistory = collectedAmount > 0 ? [{
             paidOn: new Date(),
@@ -145,6 +142,49 @@ export async function POST(req: Request) {
             mode: paymentMode,
             note: 'Initial payment at bill generation'
         }] : [];
+
+        if (settleBill) {
+            // Waive the remaining balance
+            if (remainingDue > 0) {
+                paymentHistory.push({
+                    paidOn: new Date(),
+                    amount: remainingDue, // We treat the waived amount as a "payment" of type WAIVED for logic simplicity, OR check schema?
+                    mode: 'WAIVED',       // You might need to check if 'WAIVED' is a valid Enum in your schema or just string.
+                    note: 'Balance waived by owner'
+                });
+            }
+            remainingDue = 0;
+            status = 'PAID';
+        } else {
+            if (remainingDue <= 0 && collectedAmount > 0) status = 'PAID';
+            else if (collectedAmount > 0) status = 'PARTIAL';
+        }
+
+        // SYNC WITH METER READINGS COLLECTION
+        // Check if a reading for this exact value already exists for this tenant in this room
+        const existingReading = await MeterReading.findOne({
+            tenantId,
+            roomId: tenant.roomId,
+            value: endUnits
+        });
+
+        if (!existingReading) {
+            // Ensure values are numbers
+            const val = Number(endUnits);
+            const consumed = Number(unitsConsumed);
+            // Fallback: if startUnits is invalid/missing, derive it
+            const prevVal = !isNaN(Number(startUnits)) ? Number(startUnits) : (val - consumed);
+
+            await MeterReading.create({
+                tenantId,
+                roomId: tenant.roomId,
+                ownerId: session.user.id,
+                readingDate: new Date(),
+                value: val,
+                previousValue: prevVal,
+                unitsConsumed: consumed
+            });
+        }
 
         // UPDATE TENANT & ROOM STATE
         // 1. Update Tenant's start meter reading for next cycle and balance
@@ -155,11 +195,8 @@ export async function POST(req: Request) {
             }
         });
 
-        // 2. Update Room's persistent meter reading so newly added tenants or edits pick it up
+        // 2. Update Room's persistent meter reading
         if (tenant.roomId) {
-            // Use dynamic import or just rely on mongoose if model is compiled, 
-            // but best to just use the Mongoose model registry to avoid circular dependency issues if any.
-            // or just direct update since we have connection
             await mongoose.model('Room').findByIdAndUpdate(tenant.roomId, {
                 currentMeterReading: endUnits
             });
@@ -170,6 +207,7 @@ export async function POST(req: Request) {
             ownerId: session.user.id,
             propertyId,
             tenantId,
+            roomId: tenant.roomId,
             month,
             year,
             meter: {
@@ -178,7 +216,7 @@ export async function POST(req: Request) {
                 unitsConsumed
             },
             amounts: {
-                ratePerUnit: settings.defaultRatePerUnit,
+                ratePerUnit: electricityRate,
                 waterCharge,
                 rentAmount,
                 previousDue,

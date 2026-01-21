@@ -14,6 +14,7 @@ interface Room {
     currentMeterReading?: number;
     currentKitchenMeterReading?: number;
     currentTenantId?: { fullName: string };
+    baseRent?: number;
 }
 
 interface Property {
@@ -107,11 +108,14 @@ export default function RoomsPage() {
                                     </h3>
                                     <p className="text-sm text-gray-500">Floor {room.floorNumber}</p>
                                     <p className="text-xs text-gray-400 mt-1">
-                                        Meter: {room.currentMeterReading || 0}
+                                        Last reading: {room.currentMeterReading || 0}
                                         {room.type === 'ROOM_KITCHEN' && (
                                             <span className="ml-2 border-l border-gray-600 pl-2">Kitchen: {room.currentKitchenMeterReading || 0}</span>
                                         )}
                                     </p>
+                                    <div className="mt-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400 border border-orange-100 dark:border-orange-800">
+                                        ₹ {room.baseRent || 0} / month
+                                    </div>
                                 </div>
                                 <div className={`px-2 py-1 rounded text-xs font-bold uppercase ${room.currentTenantId ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400' : 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400'
                                     }`}>

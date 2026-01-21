@@ -59,6 +59,7 @@ export default function GenerateBillPage() {
     const [pendingFormData, setPendingFormData] = useState<any>(null);
     const [paymentMode, setPaymentMode] = useState<'CASH' | 'UPI'>('CASH');
     const [collectedAmount, setCollectedAmount] = useState<number>(0);
+    const [settleBill, setSettleBill] = useState(false);
 
     const values = watch();
     const {
@@ -204,16 +205,22 @@ export default function GenerateBillPage() {
         setValue('totalAmount', total);
     }, [rentAmount, waterCharge, electricityAmount, previousDues, setValue]);
 
-    const fetchBillDetails = async (usageOverride?: number) => {
+    const fetchBillDetails = async (usageOverride?: number, currentReadingOverride?: number) => {
         if (!tenantId || !month) return;
 
         setCalculating(true);
         setError('');
 
         try {
-            const currentUsage = usageOverride !== undefined ? usageOverride : Math.max(0, (Number(currentReading) - Number(previousReading)));
+            let url = `/api/bills/calculate?tenantId=${tenantId}&month=${month}`;
 
-            const res = await fetch(`/api/bills/calculate?tenantId=${tenantId}&month=${month}&usage=${currentUsage}`);
+            if (usageOverride !== undefined) {
+                url += `&usage=${usageOverride}`;
+            } else if (currentReadingOverride !== undefined) {
+                url += `&currentReading=${currentReadingOverride}`;
+            }
+
+            const res = await fetch(url);
             const data = await res.json();
 
             if (!res.ok) throw new Error(data.message);
@@ -224,9 +231,13 @@ export default function GenerateBillPage() {
             setValue('electricityRate', data.electricityRate);
             setValue('electricityAmount', data.electricityAmount);
             setValue('previousDues', data.previousDues);
+            setValue('electricityUsage', data.electricityUsage);
 
             if (data.previousReading !== undefined) {
                 setValue('previousReading', data.previousReading);
+            }
+            if (data.currentReading !== undefined && usageOverride === undefined && currentReadingOverride === undefined) {
+                setValue('currentReading', data.currentReading);
             }
 
         } catch (err: any) {
@@ -237,8 +248,8 @@ export default function GenerateBillPage() {
     };
 
     const handleCalculateClick = () => {
-        const usage = Math.max(0, Number(currentReading) - Number(previousReading));
-        fetchBillDetails(usage);
+        // When clicking calculate, we use the value currently in the input
+        fetchBillDetails(undefined, Number(currentReading));
     };
 
     const onFormSubmit = (data: any) => {
@@ -281,7 +292,8 @@ export default function GenerateBillPage() {
 
                 // Payment Info
                 collectedAmount: Number(collectedAmount),
-                paymentMode: paymentMode
+                paymentMode: paymentMode,
+                settleBill: settleBill
             };
 
             const res = await fetch('/api/bills', {
@@ -595,11 +607,34 @@ export default function GenerateBillPage() {
                                 </div>
                             </div>
 
-                            <div className="flex justify-between items-center text-sm p-3 bg-gray-50 dark:bg-zinc-900/30 rounded-lg">
-                                <span className="text-gray-600 dark:text-gray-400">Remaining Due:</span>
-                                <span className={`font-bold ${remainingDueDisplay > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                                    ₹ {remainingDueDisplay.toLocaleString()}
-                                </span>
+                            <div className="space-y-3 p-3 bg-gray-50 dark:bg-zinc-900/30 rounded-lg">
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-600 dark:text-gray-400">Remaining Due:</span>
+                                    <span className={`font-bold ${remainingDueDisplay > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                                        {settleBill ? (
+                                            <span className="line-through text-gray-400 mr-2">₹ {remainingDueDisplay.toLocaleString()}</span>
+                                        ) : (
+                                            `₹ ${remainingDueDisplay.toLocaleString()}`
+                                        )}
+                                        {settleBill && <span className="text-green-600 no-underline">Waived</span>}
+                                    </span>
+                                </div>
+
+                                {remainingDueDisplay > 0 && (
+                                    <label className="flex items-center gap-2 cursor-pointer group">
+                                        <div className="relative flex items-center">
+                                            <input
+                                                type="checkbox"
+                                                checked={settleBill}
+                                                onChange={(e) => setSettleBill(e.target.checked)}
+                                                className="peer h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                                            />
+                                        </div>
+                                        <span className="text-xs text-gray-500 group-hover:text-primary transition-colors">
+                                            Settle full bill (Waive ₹{remainingDueDisplay})
+                                        </span>
+                                    </label>
+                                )}
                             </div>
 
                             <button

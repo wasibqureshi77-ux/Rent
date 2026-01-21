@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/db';
 import MeterReading from '@/models/MeterReading';
 import Tenant from '@/models/Tenant';
+import Room from '@/models/Room';
 
 export async function GET(req: Request) {
     const session = await getServerSession(authOptions);
@@ -28,6 +29,11 @@ export async function GET(req: Request) {
             query.tenantId = tenantId;
         }
 
+        const roomId = url.searchParams.get('roomId');
+        if (roomId) {
+            query.roomId = roomId;
+        }
+
         // If filtering by month, we need to match the date range
         if (month) {
             const start = new Date(`${month}-01`);
@@ -36,10 +42,14 @@ export async function GET(req: Request) {
         }
 
         const readings = await MeterReading.find(query)
-            .populate('tenantId', 'name roomNo')
-            .sort({ readingDate: -1 });
+            .populate('tenantId', 'fullName roomNumber')
+            .sort({ readingDate: -1, createdAt: -1 });
 
-        return NextResponse.json(readings);
+        return NextResponse.json(readings, {
+            headers: {
+                'Cache-Control': 'no-store, max-age=0'
+            }
+        });
     } catch (error) {
         return NextResponse.json({ message: 'Error fetching readings' }, { status: 500 });
     }
@@ -58,34 +68,56 @@ export async function POST(req: Request) {
         const body = await req.json();
         const { tenantId, readingDate, value } = body;
 
+        // Fetch tenant to get roomId and start value
+        const tenant = await Tenant.findById(tenantId);
+        if (!tenant) {
+            return NextResponse.json({ message: 'Tenant not found' }, { status: 404 });
+        }
+
         // Calculate units consumed
-        // Find the previous reading for this tenant
+        // Find the most recent reading valid for current lease
         const previousReading = await MeterReading.findOne({
             tenantId,
-            readingDate: { $lt: new Date(readingDate) }
-        }).sort({ readingDate: -1 });
+            readingDate: {
+                $lte: new Date(readingDate),
+                $gte: tenant.startDate
+            }
+        }).sort({ readingDate: -1, createdAt: -1 });
 
         let unitsConsumed = 0;
+        let baselineValue = 0;
+
         if (previousReading) {
-            unitsConsumed = value - previousReading.value;
-            if (unitsConsumed < 0) {
-                return NextResponse.json({ message: 'New reading cannot be lower than previous reading' }, { status: 400 });
-            }
+            baselineValue = previousReading.value;
+            unitsConsumed = value - baselineValue;
         } else {
-            // First reading, units consumed is 0 or based on initial meter setting (assuming 0 for now)
-            unitsConsumed = 0; // Or treat 'value' as consumed if starting from 0? Usually meter starts at X.
-            // Let's assume unitsConsumed = 0 for the very first entry unless base is provided.
-            // Or user prompts "Previous Reading" manually?
-            // Simpler: Just save 0 units for first time.
+            baselineValue = tenant.meterReadingStart || 0;
+            unitsConsumed = value - baselineValue;
+        }
+
+        // Check if this new reading is actually higher than the baseline
+        if (unitsConsumed < 0) {
+            return NextResponse.json({
+                message: `New reading (${value}) cannot be lower than previous value (${baselineValue})`
+            }, { status: 400 });
         }
 
         const reading = await MeterReading.create({
             tenantId,
+            roomId: tenant.roomId,
             ownerId: session.user.id,
             readingDate,
             value,
+            previousValue: baselineValue,
             unitsConsumed
         });
+
+        // Update Room Model to reflect latest reading
+        if (tenant.roomId) {
+            await Room.findByIdAndUpdate(tenant.roomId, {
+                currentMeterReading: value
+            });
+        }
 
         return NextResponse.json(reading, { status: 201 });
     } catch (error: any) {

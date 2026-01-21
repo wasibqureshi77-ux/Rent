@@ -237,6 +237,11 @@ export default function EditTenantPage({ params }: { params: Promise<{ id: strin
                                 min="0"
                                 className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white placeholder:text-gray-400 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
                             />
+                            {tenant?.roomId?.baseRent && (
+                                <p className="mt-1 text-xs text-orange-600 dark:text-orange-400 font-medium">
+                                    Room's default rent is ₹ {tenant.roomId.baseRent}
+                                </p>
+                            )}
                         </div>
 
                         {/* Start Date */}

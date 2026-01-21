@@ -37,6 +37,10 @@ const RoomSchema = new mongoose.Schema({
     currentKitchenMeterReading: {
         type: Number,
         default: 0
+    },
+    baseRent: {
+        type: Number,
+        default: 0
     }
 }, { timestamps: true });
 

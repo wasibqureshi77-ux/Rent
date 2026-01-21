@@ -6,6 +6,8 @@ import Tenant from '@/models/Tenant';
 import MonthlyBill from '@/models/MonthlyBill';
 import Property from '@/models/Property';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/dashboard/summary - Get dashboard summary for owner
 export async function GET(req: Request) {
     const session = await getServerSession(authOptions);
@@ -116,14 +118,14 @@ export async function GET(req: Request) {
             {
                 $group: {
                     _id: null,
-                    totalRevenue: { $sum: '$amounts.totalAmount' },
+                    rentRevenue: { $sum: { $add: ['$amounts.rentAmount', '$amounts.waterCharge'] } },
                     totalCollected: { $sum: '$payments.amountPaid' },
                     electricityUsage: { $sum: '$meter.unitsConsumed' }
                 }
             }
         ]);
 
-        const currentMonthStats = monthlyStats.length > 0 ? monthlyStats[0] : { totalRevenue: 0, totalCollected: 0, electricityUsage: 0 };
+        const currentMonthStats = monthlyStats.length > 0 ? monthlyStats[0] : { rentRevenue: 0, totalCollected: 0, electricityUsage: 0 };
 
         // 8. Get top pending payments (high outstanding first)
         const pendingPayments = await MonthlyBill.find({
@@ -133,7 +135,6 @@ export async function GET(req: Request) {
         })
             .populate('tenantId', 'fullName roomNumber')
             .populate('propertyId', 'name')
-            .sort({ 'payments.remainingDue': -1 })
             .sort({ 'payments.remainingDue': -1 })
             .limit(5);
 
@@ -159,8 +160,8 @@ export async function GET(req: Request) {
                 totalOutstandingDue,
                 currentMonth,
                 currentYear,
-                totalRevenue: currentMonthStats.totalCollected, // Use actual collected amount as revenue
-                totalBilled: currentMonthStats.totalRevenue,
+                totalRevenue: currentMonthStats.rentRevenue, // Revenue = Rent + Water (Billed)
+                totalBilled: currentMonthStats.rentRevenue, // Keeping consistent
                 electricityUsage: currentMonthStats.electricityUsage,
                 totalOccupancyMonths: Math.round(totalOccupancyMonths)
             },

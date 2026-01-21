@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/db';
 import Room from '@/models/Room';
 import Tenant from '@/models/Tenant';
+import Property from '@/models/Property';
 
 // GET /api/rooms?propertyId=...
 export async function GET(req: Request) {
@@ -14,7 +15,10 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const propertyId = searchParams.get('propertyId');
 
-    const query: any = { ownerId: session.user.role === 'SUPER_ADMIN' ? undefined : session.user.id };
+    const query: any = {};
+    if (session.user.role !== 'SUPER_ADMIN') {
+        query.ownerId = session.user.id;
+    }
     if (propertyId) query.propertyId = propertyId;
 
     try {

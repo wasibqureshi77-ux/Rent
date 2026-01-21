@@ -3,6 +3,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/db';
 import Property from '@/models/Property';
+import Room from '@/models/Room';
+import Tenant from '@/models/Tenant';
+
 
 // GET /api/properties/:id
 export async function GET(
@@ -112,7 +115,8 @@ export async function DELETE(
             query.ownerId = session.user.id;
         }
 
-        const property = await Property.findOneAndDelete(query);
+        // Check if property exists first
+        const property = await Property.findOne(query);
 
         if (!property) {
             return NextResponse.json({
@@ -120,8 +124,22 @@ export async function DELETE(
             }, { status: 404 });
         }
 
+        // Check if there are any tenants in this property
+        const tenantCount = await Tenant.countDocuments({ propertyId: id });
+        if (tenantCount > 0) {
+            return NextResponse.json({
+                message: "We can't delete this property because rooms and tenants exist in this property. Please remove all tenants first."
+            }, { status: 400 });
+        }
+
+        // Delete all rooms associated with this property
+        await Room.deleteMany({ propertyId: id });
+
+        // Delete the property
+        await Property.findByIdAndDelete(id);
+
         return NextResponse.json({
-            message: 'Property deleted successfully'
+            message: 'Property and its rooms deleted successfully'
         });
     } catch (error) {
         console.error('Error deleting property:', error);

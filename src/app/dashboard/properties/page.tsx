@@ -85,7 +85,8 @@ export default function PropertiesPage() {
             });
 
             if (!res.ok) {
-                throw new Error('Failed to delete property');
+                const errorData = await res.json();
+                throw new Error(errorData.message || 'Failed to delete property');
             }
 
             fetchProperties();

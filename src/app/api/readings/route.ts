@@ -19,7 +19,10 @@ export async function GET(req: Request) {
         const tenantId = url.searchParams.get('tenantId');
         const month = url.searchParams.get('month'); // YYYY-MM
 
-        let query: any = { ownerId: session.user.id };
+        let query: any = {};
+        if (session.user.role !== 'SUPER_ADMIN') {
+            query.ownerId = session.user.id;
+        }
 
         if (tenantId) {
             query.tenantId = tenantId;

@@ -53,7 +53,8 @@ export default function TenantsPage() {
             if (res.ok) {
                 setTenants(prev => prev.filter(t => t._id !== id));
             } else {
-                alert('Failed to delete tenant');
+                const errorData = await res.json();
+                alert(errorData.message || 'Failed to delete tenant');
             }
         } catch (error) {
             console.error('Error deleting tenant:', error);

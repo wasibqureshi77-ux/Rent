@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/db';
 import Tenant from '@/models/Tenant';
+import Room from '@/models/Room';
+
 
 export async function DELETE(
     req: Request,
@@ -17,18 +19,31 @@ export async function DELETE(
     try {
         await connectDB();
         const { id } = await params;
-        const tenant = await Tenant.findOneAndDelete({
-            _id: id,
-            ownerId: session.user.id
-        });
+
+        const query: any = { _id: id };
+        if (session.user.role !== 'SUPER_ADMIN') {
+            query.ownerId = session.user.id;
+        }
+
+        const tenant = await Tenant.findOne(query);
 
         if (!tenant) {
             return NextResponse.json({ message: 'Tenant not found' }, { status: 404 });
         }
 
+        // Release the room status before deleting tenant
+        if (tenant.roomId) {
+            await Room.findByIdAndUpdate(tenant.roomId, {
+                $set: { currentTenantId: null }
+            });
+        }
+
+        await Tenant.deleteOne({ _id: id });
+
         return NextResponse.json({ message: 'Tenant deleted successfully' });
-    } catch (error) {
-        return NextResponse.json({ message: 'Error deleting tenant' }, { status: 500 });
+    } catch (error: any) {
+        console.error('Error deleting tenant:', error);
+        return NextResponse.json({ message: error.message || 'Error deleting tenant' }, { status: 500 });
     }
 }
 
@@ -51,8 +66,13 @@ export async function PUT(
         delete body.ownerId;
         delete body._id;
 
+        const query: any = { _id: id };
+        if (session.user.role !== 'SUPER_ADMIN') {
+            query.ownerId = session.user.id;
+        }
+
         const tenant = await Tenant.findOneAndUpdate(
-            { _id: id, ownerId: session.user.id },
+            query,
             { $set: body },
             { new: true, runValidators: true }
         );
@@ -80,10 +100,11 @@ export async function GET(
     try {
         await connectDB();
         const { id } = await params;
-        const tenant = await Tenant.findOne({
-            _id: id,
-            ownerId: session.user.id
-        });
+        const query: any = { _id: id };
+        if (session.user.role !== 'SUPER_ADMIN') {
+            query.ownerId = session.user.id;
+        }
+        const tenant = await Tenant.findOne(query);
 
         if (!tenant) {
             return NextResponse.json({ message: 'Tenant not found' }, { status: 404 });

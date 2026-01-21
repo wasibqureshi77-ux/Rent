@@ -12,7 +12,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     await connectDB();
 
     try {
-        const room = await Room.findOne({ _id: id, ownerId: session.user.role === 'SUPER_ADMIN' ? undefined : session.user.id });
+        const query: any = { _id: id };
+        if (session.user.role !== 'SUPER_ADMIN') {
+            query.ownerId = session.user.id;
+        }
+        const room = await Room.findOne(query);
         if (!room) return NextResponse.json({ message: 'Room not found' }, { status: 404 });
         return NextResponse.json(room);
     } catch (error) {
@@ -29,8 +33,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const body = await req.json();
 
     try {
+        const query: any = { _id: id };
+        if (session.user.role !== 'SUPER_ADMIN') {
+            query.ownerId = session.user.id;
+        }
         const room = await Room.findOneAndUpdate(
-            { _id: id, ownerId: session.user.role === 'SUPER_ADMIN' ? undefined : session.user.id },
+            query,
             { $set: body },
             { new: true }
         );
@@ -53,11 +61,15 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     await connectDB();
 
     try {
-        const room = await Room.findOneAndDelete({
+        const query: any = {
             _id: id,
-            ownerId: session.user.role === 'SUPER_ADMIN' ? undefined : session.user.id,
             currentTenantId: null // Prevent deleting occupied rooms
-        });
+        };
+        if (session.user.role !== 'SUPER_ADMIN') {
+            query.ownerId = session.user.id;
+        }
+
+        const room = await Room.findOneAndDelete(query);
 
         if (!room) {
             // Check if it exists but is occupied

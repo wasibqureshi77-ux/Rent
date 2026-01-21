@@ -85,10 +85,11 @@ export async function POST(req: Request) {
 
 
         // Fetch tenant
-        const tenant = await Tenant.findOne({
-            _id: tenantId,
-            ownerId: session.user.role === 'SUPER_ADMIN' ? undefined : session.user.id
-        });
+        const tenantQuery: any = { _id: tenantId };
+        if (session.user.role !== 'SUPER_ADMIN') {
+            tenantQuery.ownerId = session.user.id;
+        }
+        const tenant = await Tenant.findOne(tenantQuery);
 
         if (!tenant) {
             return NextResponse.json({

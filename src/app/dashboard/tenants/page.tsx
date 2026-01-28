@@ -13,12 +13,15 @@ interface Tenant {
     isActive: boolean;
     propertyId?: any;
     roomId?: any;
+    rooms?: any[]; // New field for multiple rooms
     stats?: {
-        lastMeterReading: number;
+        lastMeterReadings: { roomId: string, roomNumber: string, value: number }[];
+        lastMeterReading?: number; // Keep for legacy/compat if needed
         totalDue: number;
         cycleEndDate: string;
     };
 }
+
 
 export default function TenantsPage() {
     const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -266,7 +269,10 @@ export default function TenantsPage() {
                                         <Home className="h-3 w-3" /> {tenant.propertyId?.name || 'N/A'}
                                     </p>
                                     <p className="text-xs text-gray-400">
-                                        Room {tenant.roomNumber || 'N/A'} {tenant.roomId?.floorNumber && `• Floor ${tenant.roomId.floorNumber}`}
+                                        {tenant.rooms && tenant.rooms.length > 0
+                                            ? `Rooms: ${tenant.rooms.map(r => r.roomNumber).join(', ')}`
+                                            : `Room ${(tenant as any).roomNumber || 'N/A'} ${(tenant as any).roomId?.floorNumber ? `• Floor ${(tenant as any).roomId.floorNumber}` : ''}`
+                                        }
                                     </p>
                                 </div>
                             </div>
@@ -282,15 +288,28 @@ export default function TenantsPage() {
                                         </p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-xs text-gray-500">Last Meter</p>
-                                        <p className="font-medium text-gray-900 dark:text-gray-200">
-                                            {tenant.stats?.lastMeterReading ?? 0}
-                                        </p>
+                                        <p className="text-xs text-gray-500 mb-1">Last Meter</p>
+                                        <div className="flex flex-col items-end gap-1">
+                                            {tenant.stats?.lastMeterReadings?.map((reading, idx) => (
+                                                <div key={idx} className="flex items-center gap-2">
+                                                    <span className="text-[10px] bg-gray-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-gray-500">
+                                                        #{reading.roomNumber}
+                                                    </span>
+                                                    <span className="font-medium text-gray-900 dark:text-gray-200">
+                                                        {reading.value}
+                                                    </span>
+                                                </div>
+                                            )) || <span className="text-gray-400">-</span>}
+                                        </div>
                                     </div>
                                     <div>
                                         <p className="text-xs text-gray-500">Rent</p>
                                         <p className="font-medium text-gray-900 dark:text-gray-200 flex items-center gap-1 text-primary">
-                                            <IndianRupee className="h-3 w-3" /> {tenant.roomId?.baseRent ?? tenant.baseRent ?? 0}
+                                            <IndianRupee className="h-3 w-3" />
+                                            {tenant.rooms && tenant.rooms.length > 0
+                                                ? tenant.rooms.reduce((sum, r) => sum + (r.baseRent || 0), 0)
+                                                : ((tenant as any).roomId?.baseRent ?? tenant.baseRent ?? 0)
+                                            }
                                         </p>
                                     </div>
                                     <div className="text-right">

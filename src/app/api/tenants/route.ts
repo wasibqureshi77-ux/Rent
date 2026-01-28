@@ -22,62 +22,72 @@ export async function POST(req: Request) {
         const body = await req.json();
 
         // Validate required fields
-        const requiredFields = ['propertyId', 'roomId', 'fullName', 'phoneNumber', 'baseRent', 'startDate'];
+        const requiredFields = ['propertyId', 'fullName', 'phoneNumber', 'rooms', 'startDate'];
         for (const field of requiredFields) {
             if (!body[field]) {
                 return NextResponse.json({ message: `Missing required field: ${field}` }, { status: 400 });
             }
         }
 
-        // Logic to verify if room is already occupied by ID
-        let roomNumber = body.roomNumber;
-
-        if (body.roomId) {
-            const room = await Room.findById(body.roomId);
-            if (!room) {
-                return NextResponse.json({ message: 'Invalid Room ID' }, { status: 400 });
-            }
-            // Auto-populate roomNumber from the source of truth if missing or strictly enforce it
-            roomNumber = room.roomNumber;
-
-            const existingTenant = await Tenant.findOne({
-                roomId: body.roomId,
-                isActive: true
-            });
-
-            if (existingTenant) {
-                return NextResponse.json({ message: 'Room is already occupied by another active tenant' }, { status: 400 });
-            }
+        if (!Array.isArray(body.rooms) || body.rooms.length === 0) {
+            return NextResponse.json({ message: 'At least one room must be assigned' }, { status: 400 });
         }
+
+        // Verify all rooms availability
+        const roomIds = body.rooms.map((r: any) => r.roomId);
+
+        // Check for existing tenants in ANY of these rooms
+        const existingTenants = await Tenant.find({
+            'rooms.roomId': { $in: roomIds },
+            isActive: true
+        });
+
+        // Also check legacy single-room tenants
+        const legacyTenants = await Tenant.find({
+            roomId: { $in: roomIds },
+            isActive: true
+        });
+
+        if (existingTenants.length > 0 || legacyTenants.length > 0) {
+            return NextResponse.json({ message: 'One or more rooms are already occupied' }, { status: 400 });
+        }
+
+        // Create Tenant
+        // For backward compatibility, we can populate the "primary" room fields with the first room
+        const primaryRoom = body.rooms[0];
 
         const tenant = await Tenant.create({
             ownerId: session.user.id,
             propertyId: body.propertyId,
-            roomId: body.roomId,
+            rooms: body.rooms.map((r: any) => ({
+                roomId: r.roomId,
+                roomNumber: r.roomNumber,
+                baseRent: Number(r.baseRent),
+                meterReadingStart: Number(r.meterReadingStart) || 0
+            })),
+            // Legacy / Primary fields
+            roomId: primaryRoom.roomId,
+            roomNumber: primaryRoom.roomNumber,
+            baseRent: Number(primaryRoom.baseRent),
+            meterReadingStart: Number(primaryRoom.meterReadingStart) || 0,
+
             fullName: body.fullName,
             phoneNumber: body.phoneNumber,
             alternatePhoneNumber: body.alternatePhoneNumber,
             email: body.email,
-            roomNumber: roomNumber, // Use resolved roomNumber
-            baseRent: body.baseRent,
-            meterReadingStart: body.meterReadingStart || 0,
             startDate: body.startDate || new Date(),
             isActive: true
         });
 
-        // Update Room Model to link tenant
+        // Update All Rooms to link tenant
         try {
-            await Room.findByIdAndUpdate(
-                body.roomId,
-                { currentTenantId: tenant._id }
+            await Room.updateMany(
+                { _id: { $in: roomIds } },
+                { $set: { currentTenantId: tenant._id } }
             );
         } catch (roomErr) {
-            console.error('Failed to update room status:', roomErr);
+            console.error('Failed to update rooms status:', roomErr);
         }
-
-        // Check for pending bills from previous tenants (optional, maybe not needed for new tenant)
-        // But we might want to ensure 'meter' starts fresh or continues?
-        // Current logic takes `meterReadingStart` from input.
 
         return NextResponse.json(tenant, { status: 201 });
     } catch (error: any) {
@@ -124,18 +134,45 @@ export async function GET(req: Request) {
         // Enhance tenants with dynamic stats
         const enhancedTenants = await Promise.all(tenants.map(async (tenant) => {
             // 1. Get Latest Reading from MeterReading collection (most accurate/recent since start date)
-            const latestReadingEntry = await MeterReading.findOne({
-                tenantId: tenant._id,
-                readingDate: { $gte: tenant.startDate }
-            }).sort({ readingDate: -1, createdAt: -1 });
+            // 1. Get Latest Readings for each room
+            // We need to return an object or array that maps Room Number -> Last Reading
+            let lastMeterReadings: any[] = [];
 
-            // 2. Get Latest Bill as fallback/secondary check
-            const latestBill = await MonthlyBill.findOne({
-                tenantId: tenant._id,
-                createdAt: { $gte: tenant.startDate }
-            }).sort({ year: -1, month: -1 });
+            if (tenant.rooms && tenant.rooms.length > 0) {
+                // Iterate over rooms to find their specific last reading
+                lastMeterReadings = await Promise.all(tenant.rooms.map(async (room: any) => {
+                    // Check DB for readings for this specific room
+                    const reading = await MeterReading.findOne({
+                        tenantId: tenant._id,
+                        roomId: room.roomId._id || room.roomId,
+                        readingDate: { $gte: tenant.startDate }
+                    }).sort({ readingDate: -1, createdAt: -1 });
 
-            const lastMeterReading = latestReadingEntry?.value ?? latestBill?.meter?.endUnits ?? tenant.meterReadingStart;
+                    return {
+                        roomId: room.roomId._id || room.roomId,
+                        roomNumber: room.roomNumber,
+                        value: reading?.value ?? room.meterReadingStart ?? 0
+                    };
+                }));
+            } else {
+                // Legacy fallback
+                const latestReadingEntry = await MeterReading.findOne({
+                    tenantId: tenant._id,
+                    readingDate: { $gte: tenant.startDate }
+                }).sort({ readingDate: -1, createdAt: -1 });
+
+                // Also check latest bill if no standalone reading
+                const latestBill = await MonthlyBill.findOne({
+                    tenantId: tenant._id,
+                    createdAt: { $gte: tenant.startDate }
+                }).sort({ year: -1, month: -1 });
+
+                lastMeterReadings = [{
+                    roomId: tenant.roomId?._id || tenant.roomId,
+                    roomNumber: tenant.roomNumber,
+                    value: latestReadingEntry?.value ?? latestBill?.meter?.endUnits ?? tenant.meterReadingStart ?? 0
+                }];
+            }
 
             // 3. Calculate Total Due
             // Sum of (total - paid) for all bills that are not fully paid since start date
@@ -164,23 +201,34 @@ export async function GET(req: Request) {
                 // If today is before (e.g., today 2nd, start 5th), current cycle ends this month
                 // Actually, typically "Completion Date" means the end of the *current active* rental month.
 
+                // To calculate the "Next Rent Date" (Renewal Date):
+                // User prefers to see the exact date of next billing (e.g. 1st Jan -> 1st Feb).
+
+                let targetYear = today.getFullYear();
                 let targetMonth = today.getMonth();
-                if (today.getDate() >= startDay) {
-                    targetMonth = today.getMonth() + 1;
+
+                // If today > startDay (e.g. 29th, Start 28th) -> Next billing is next month.
+                // If today <= startDay (e.g. 10th or 28th, Start 28th) -> Next billing is this month (or today).
+                if (today.getDate() > startDay) {
+                    targetMonth += 1;
                 }
 
-                // The end date is "Start Day - 1" of the target month
-                // But simplified: If cycle starts on 5th, it ends on 4th.
-                // We create date for Start Day of Target Month, then subtract 1 day.
-                const nextCycleStart = new Date(today.getFullYear(), targetMonth, startDay);
-                cycleEndDate = new Date(nextCycleStart);
-                cycleEndDate.setDate(cycleEndDate.getDate() - 1);
+                // Construct Date
+                let nextDueDate = new Date(targetYear, targetMonth, startDay);
+
+                // Handle Overflow (e.g. Start 31, target Feb -> Feb 28)
+                const expectedMonth = (targetMonth % 12 + 12) % 12;
+                if (nextDueDate.getMonth() !== expectedMonth) {
+                    nextDueDate.setDate(0);
+                }
+
+                cycleEndDate = nextDueDate;
             }
 
             return {
                 ...tenant.toObject(),
                 stats: {
-                    lastMeterReading,
+                    lastMeterReadings, // Updated property name
                     totalDue,
                     cycleEndDate
                 }

@@ -13,17 +13,23 @@ export default function AddTenantPage() {
 
     const [formData, setFormData] = useState({
         propertyId: '',
-        roomId: '', // Link by ID
         fullName: '',
         phoneNumber: '',
         alternatePhoneNumber: '',
         email: '',
-        roomNumber: '',
-        baseRent: '',
-        meterReadingStart: '',
         startDate: new Date().toLocaleDateString('en-GB') // DD/MM/YYYY
     });
 
+    interface AssignedRoom {
+        roomId: string; // The ID
+        roomNumber: string; // The number for display
+        baseRent: string;
+        meterReadingStart: string;
+        floorNumber?: string;
+    }
+
+    const [assignedRooms, setAssignedRooms] = useState<AssignedRoom[]>([]);
+    const [selectedRoomId, setSelectedRoomId] = useState(''); // Temporary selection
     const [rooms, setRooms] = useState<any[]>([]);
     const [loadingRooms, setLoadingRooms] = useState(false);
 
@@ -70,6 +76,33 @@ export default function AddTenantPage() {
         }));
     };
 
+    const handleAddRoom = () => {
+        if (!selectedRoomId) return;
+        const room = rooms.find(r => r._id === selectedRoomId);
+        if (room) {
+            setAssignedRooms(prev => [...prev, {
+                roomId: room._id,
+                roomNumber: room.roomNumber,
+                floorNumber: room.floorNumber,
+                baseRent: room.baseRent ? String(room.baseRent) : '',
+                meterReadingStart: room.currentMeterReading ? String(room.currentMeterReading) : '0'
+            }]);
+            setSelectedRoomId(''); // Reset selection
+        }
+    };
+
+    const handleRemoveRoom = (index: number) => {
+        setAssignedRooms(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleRoomChange = (index: number, field: keyof AssignedRoom, value: string) => {
+        setAssignedRooms(prev => {
+            const newRooms = [...prev];
+            newRooms[index] = { ...newRooms[index], [field]: value };
+            return newRooms;
+        });
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
@@ -92,16 +125,24 @@ export default function AddTenantPage() {
                 }
             }
 
+            if (assignedRooms.length === 0) {
+                setError('Please assign at least one room.');
+                setIsSubmitting(false);
+                return;
+            }
+
             const payload = {
                 propertyId: formData.propertyId,
-                roomId: formData.roomId,
+                rooms: assignedRooms.map(r => ({
+                    roomId: r.roomId,
+                    roomNumber: r.roomNumber,
+                    baseRent: Number(r.baseRent),
+                    meterReadingStart: Number(r.meterReadingStart) || 0
+                })),
                 fullName: formData.fullName,
                 phoneNumber: formData.phoneNumber,
                 alternatePhoneNumber: formData.alternatePhoneNumber || undefined,
                 email: formData.email || undefined,
-                roomNumber: formData.roomNumber,
-                baseRent: Number(formData.baseRent),
-                meterReadingStart: Number(formData.meterReadingStart) || 0,
                 startDate: parsedDate
             };
 
@@ -147,7 +188,7 @@ export default function AddTenantPage() {
                             onChange={(e) => {
                                 handleChange(e);
                                 fetchRooms(e.target.value);
-                                setFormData(prev => ({ ...prev, roomNumber: '' })); // Reset room
+                                setAssignedRooms([]); // Reset assigned rooms on property change
                             }}
                             required
                             className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
@@ -169,45 +210,92 @@ export default function AddTenantPage() {
                         )}
                     </div>
 
-                    {/* Room Selection */}
-                    <div>
+                    {/* Room Selection & Assignment */}
+                    <div className="space-y-4">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Select Room *
+                            Assign Rooms *
                         </label>
-                        <select
-                            name="roomId" // Changed from roomNumber to roomId
-                            value={formData.roomId}
-                            onChange={(e) => {
-                                const selectedRoomId = e.target.value;
-                                const selectedRoom = rooms.find(r => r._id === selectedRoomId);
-                                setFormData(prev => ({
-                                    ...prev,
-                                    roomId: selectedRoomId,
-                                    roomNumber: selectedRoom ? selectedRoom.roomNumber : '', // Auto-fill room number text for display/legacy
-                                    meterReadingStart: selectedRoom?.currentMeterReading ? String(selectedRoom.currentMeterReading) : '', // Auto-fill meter
-                                    baseRent: selectedRoom?.baseRent ? String(selectedRoom.baseRent) : prev.baseRent // Auto-fill rent
-                                }));
-                            }}
-                            required
-                            disabled={!formData.propertyId || loadingRooms}
-                            className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm disabled:opacity-50"
-                        >
-                            <option value="">{loadingRooms ? 'Loading rooms...' : 'Select a Room'}</option>
-                            {rooms.length > 0 ? (
-                                rooms.map(room => (
-                                    <option
-                                        key={room._id}
-                                        value={room._id} // Value is now ID
-                                        disabled={!!room.currentTenantId}
-                                        className={room.currentTenantId ? 'text-red-400' : 'text-green-600'}
-                                    >
-                                        {room.roomNumber} (Floor {room.floorNumber}) - ₹{room.baseRent || 0} {room.currentTenantId ? '- Occupied' : '- Vacant'}
-                                    </option>
-                                ))
-                            ) : (
-                                <option value="" disabled>No rooms found. Add rooms first.</option>
-                            )}
-                        </select>
+
+                        <div className="flex gap-2">
+                            <select
+                                value={selectedRoomId}
+                                onChange={(e) => setSelectedRoomId(e.target.value)}
+                                disabled={!formData.propertyId || loadingRooms}
+                                className="block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm disabled:opacity-50"
+                            >
+                                <option value="">{loadingRooms ? 'Loading rooms...' : 'Select a Room to Add'}</option>
+                                {rooms.length > 0 ? (
+                                    rooms.map(room => {
+                                        const isAlreadyAssigned = assignedRooms.some(ar => ar.roomId === room._id);
+                                        return (
+                                            <option
+                                                key={room._id}
+                                                value={room._id}
+                                                disabled={!!room.currentTenantId || isAlreadyAssigned}
+                                                className={room.currentTenantId ? 'text-red-400' : isAlreadyAssigned ? 'text-gray-400' : 'text-green-600'}
+                                            >
+                                                {room.roomNumber} (Floor {room.floorNumber}) - ₹{room.baseRent || 0} {room.currentTenantId ? '- Occupied' : isAlreadyAssigned ? '- Selected' : '- Vacant'}
+                                            </option>
+                                        );
+                                    })
+                                ) : (
+                                    <option value="" disabled>No rooms found.</option>
+                                )}
+                            </select>
+                            <button
+                                type="button"
+                                onClick={handleAddRoom}
+                                disabled={!selectedRoomId}
+                                className="bg-primary text-white px-4 py-2 rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Add
+                            </button>
+                        </div>
+
+                        {/* Assigned Rooms List */}
+                        {assignedRooms.length > 0 && (
+                            <div className="space-y-3 mt-4">
+                                {assignedRooms.map((room, index) => (
+                                    <div key={room.roomId} className="p-4 bg-gray-50 dark:bg-zinc-900/50 rounded-lg border border-gray-200 dark:border-gray-800 relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRemoveRoom(index)}
+                                            className="absolute top-2 right-2 text-red-500 hover:text-red-700 text-sm"
+                                        >
+                                            Remove
+                                        </button>
+                                        <div className="mb-2 font-medium text-gray-900 dark:text-white">
+                                            Room {room.roomNumber} <span className="text-gray-500 text-xs font-normal">(Floor {room.floorNumber})</span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-500 mb-1">Monthly Rent (₹)</label>
+                                                <input
+                                                    type="number"
+                                                    value={room.baseRent}
+                                                    onChange={(e) => handleRoomChange(index, 'baseRent', e.target.value)}
+                                                    className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 px-2 py-1.5 text-sm"
+                                                    placeholder="Rent"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-500 mb-1">Meter Start</label>
+                                                <input
+                                                    type="number"
+                                                    value={room.meterReadingStart}
+                                                    onChange={(e) => handleRoomChange(index, 'meterReadingStart', e.target.value)}
+                                                    className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 px-2 py-1.5 text-sm"
+                                                    placeholder="Reading"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                <div className="text-right text-sm font-semibold text-gray-900 dark:text-white">
+                                    Total Rent: ₹{assignedRooms.reduce((sum, r) => sum + (Number(r.baseRent) || 0), 0)}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -275,41 +363,7 @@ export default function AddTenantPage() {
 
 
 
-                        {/* Monthly Rent */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Monthly Rent (₹) *
-                            </label>
-                            <input
-                                name="baseRent"
-                                type="number"
-                                value={formData.baseRent}
-                                onChange={handleChange}
-                                required
-                                min="0"
-                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white placeholder:text-gray-400 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
-                                placeholder="5000"
-                            />
-                        </div>
 
-                        {/* Meter Reading Start - NEW FIELD */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Meter Reading Start
-                            </label>
-                            <input
-                                name="meterReadingStart"
-                                type="number"
-                                value={formData.meterReadingStart}
-                                onChange={handleChange}
-                                min="0"
-                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white placeholder:text-gray-400 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
-                                placeholder="0"
-                            />
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                Initial electricity meter reading
-                            </p>
-                        </div>
 
                         {/* Start Date */}
                         <div>
@@ -361,7 +415,7 @@ export default function AddTenantPage() {
                     <div className="flex justify-end pt-4">
                         <button
                             type="submit"
-                            disabled={isSubmitting || properties.length === 0}
+                            disabled={isSubmitting || properties.length === 0 || assignedRooms.length === 0}
                             className="inline-flex justify-center rounded-lg bg-primary px-8 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isSubmitting ? 'Saving...' : 'Save Tenant'}

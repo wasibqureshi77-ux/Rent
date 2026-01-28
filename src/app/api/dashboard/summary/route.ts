@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/db';
@@ -28,12 +29,14 @@ export async function GET(req: Request) {
             : session.user.id;
 
         // Build base query
-        const baseQuery: any = session.user.role === 'SUPER_ADMIN' && !ownerId
-            ? {}
-            : { ownerId };
+        const baseQuery: any = {};
+
+        if (session.user.role !== 'SUPER_ADMIN' || ownerId) {
+            baseQuery.ownerId = new mongoose.Types.ObjectId(ownerId as string);
+        }
 
         if (propertyId) {
-            baseQuery.propertyId = propertyId;
+            baseQuery.propertyId = new mongoose.Types.ObjectId(propertyId);
         }
 
         // Get current month and year

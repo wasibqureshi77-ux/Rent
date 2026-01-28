@@ -25,6 +25,8 @@ export default function EditTenantPage({ params }: { params: Promise<{ id: strin
         startDate: '', // Added startDate
     });
 
+    const [roomsData, setRoomsData] = useState<any[]>([]);
+
     useEffect(() => {
         fetchTenant();
     }, [id]);
@@ -60,6 +62,20 @@ export default function EditTenantPage({ params }: { params: Promise<{ id: strin
                 meterReadingStart: data.meterReadingStart?.toString() || '0',
                 startDate: formattedDate,
             });
+
+            // Initialize rooms data
+            if (data.rooms && data.rooms.length > 0) {
+                setRoomsData(data.rooms);
+            } else {
+                // Fallback for legacy single-room tenants
+                setRoomsData([{
+                    roomId: data.roomId?._id || data.roomId,
+                    roomNumber: data.roomNumber,
+                    baseRent: data.baseRent,
+                    meterReadingStart: data.meterReadingStart
+                }]);
+            }
+
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -74,25 +90,50 @@ export default function EditTenantPage({ params }: { params: Promise<{ id: strin
         }));
     };
 
+    const handleRoomChange = (index: number, field: string, value: string) => {
+        const updatedRooms = [...roomsData];
+        updatedRooms[index] = {
+            ...updatedRooms[index],
+            [field]: value
+        };
+        setRoomsData(updatedRooms);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
         setError('');
 
         try {
-            // Parse DD/MM/YYYY to Date object
+            // Parse Date manually to ensure correct local/UTC handling
             let parsedDate: Date | undefined = undefined;
             if (formData.startDate) {
-                const parts = formData.startDate.split('/');
+                // Support DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+                const parts = formData.startDate.split(/[\/\-\.]/);
+
                 if (parts.length === 3) {
                     const day = parseInt(parts[0], 10);
                     const month = parseInt(parts[1], 10) - 1;
                     const year = parseInt(parts[2], 10);
-                    parsedDate = new Date(year, month, day);
-                } else {
-                    // Fallback check if it's somehow ISO (shouldn't be with my logic, but safe to check)
+
+                    // Basic validation
+                    if (month >= 0 && month <= 11 && day >= 1 && day <= 31) {
+                        parsedDate = new Date(year, month, day, 12, 0, 0);
+                    }
+                }
+
+                // If regex split didn't work or validation failed, try standard constructor
+                if (!parsedDate || isNaN(parsedDate.getTime())) {
                     const fallback = new Date(formData.startDate);
-                    if (!isNaN(fallback.getTime())) parsedDate = fallback;
+                    if (!isNaN(fallback.getTime())) {
+                        parsedDate = fallback;
+                    }
+                }
+
+                if (!parsedDate || isNaN(parsedDate.getTime())) {
+                    setError('Invalid Date Format. Please use DD/MM/YYYY');
+                    setIsSubmitting(false);
+                    return;
                 }
             }
 
@@ -101,10 +142,20 @@ export default function EditTenantPage({ params }: { params: Promise<{ id: strin
                 phoneNumber: formData.phoneNumber,
                 alternatePhoneNumber: formData.alternatePhoneNumber || undefined,
                 email: formData.email || undefined,
-                roomNumber: formData.roomNumber,
-                baseRent: Number(formData.baseRent),
-                meterReadingStart: Number(formData.meterReadingStart) || 0,
                 startDate: parsedDate,
+
+                // Send updated rooms array
+                rooms: roomsData.map(r => ({
+                    roomId: r.roomId._id || r.roomId, // Ensure we send ID
+                    roomNumber: r.roomNumber,
+                    baseRent: Number(r.baseRent),
+                    meterReadingStart: Number(r.meterReadingStart) || 0
+                })),
+
+                // For legacy compatibility, update top-level fields based on first room
+                roomNumber: roomsData[0]?.roomNumber,
+                baseRent: Number(roomsData[0]?.baseRent),
+                meterReadingStart: Number(roomsData[0]?.meterReadingStart)
             };
 
             const res = await fetch(`/api/tenants/${id}`, {
@@ -208,44 +259,8 @@ export default function EditTenantPage({ params }: { params: Promise<{ id: strin
                             />
                         </div>
 
-                        {/* Room Number */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Room Number *
-                            </label>
-                            <input
-                                name="roomNumber"
-                                type="text"
-                                value={formData.roomNumber}
-                                onChange={handleChange}
-                                required
-                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white placeholder:text-gray-400 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
-                            />
-                        </div>
-
-                        {/* Monthly Rent */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Monthly Rent (₹) *
-                            </label>
-                            <input
-                                name="baseRent"
-                                type="number"
-                                value={formData.baseRent}
-                                onChange={handleChange}
-                                required
-                                min="0"
-                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white placeholder:text-gray-400 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
-                            />
-                            {tenant?.roomId?.baseRent && (
-                                <p className="mt-1 text-xs text-orange-600 dark:text-orange-400 font-medium">
-                                    Room's default rent is ₹ {tenant.roomId.baseRent}
-                                </p>
-                            )}
-                        </div>
-
                         {/* Start Date */}
-                        <div>
+                        <div className="sm:col-span-2 md:col-span-1">
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                 Month Start Date
                             </label>
@@ -287,22 +302,47 @@ export default function EditTenantPage({ params }: { params: Promise<{ id: strin
                             </p>
                         </div>
 
-                        {/* Meter Reading Start */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Meter Reading Start
-                            </label>
-                            <input
-                                name="meterReadingStart"
-                                type="number"
-                                value={formData.meterReadingStart}
-                                onChange={handleChange}
-                                min="0"
-                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-white placeholder:text-gray-400 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
-                            />
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                Initial electricity meter reading
-                            </p>
+                        {/* Rooms Section */}
+                        <div className="sm:col-span-2 space-y-4">
+                            <h3 className="text-md font-semibold text-gray-900 dark:text-white border-b pb-2">Assigned Rooms</h3>
+                            {roomsData.map((room, index) => (
+                                <div key={index} className="p-4 bg-gray-50 dark:bg-zinc-900/50 rounded-lg border border-gray-100 dark:border-gray-800 space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        {/* Room Number (Read Only usually, but let's see) */}
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">Room Number</label>
+                                            <input
+                                                type="text"
+                                                value={room.roomNumber || ''}
+                                                disabled
+                                                className="w-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-2 text-sm text-gray-500 cursor-not-allowed"
+                                            />
+                                        </div>
+
+                                        {/* Monthly Rent */}
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Monthly Rent (₹)</label>
+                                            <input
+                                                type="number"
+                                                value={room.baseRent}
+                                                onChange={(e) => handleRoomChange(index, 'baseRent', e.target.value)}
+                                                className="w-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
+                                            />
+                                        </div>
+
+                                        {/* Meter Reading Start */}
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Initial Meter Reading</label>
+                                            <input
+                                                type="number"
+                                                value={room.meterReadingStart}
+                                                onChange={(e) => handleRoomChange(index, 'meterReadingStart', e.target.value)}
+                                                className="w-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-gray-700 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
 

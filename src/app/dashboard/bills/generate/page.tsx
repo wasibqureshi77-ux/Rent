@@ -17,13 +17,13 @@ interface Tenant {
 
 export default function GenerateBillPage() {
     const router = useRouter();
-    const [tenants, setTenants] = useState<Tenant[]>([]);
+    const [roomReadings, setRoomReadings] = useState<any[]>([]); // New state for room details
+    const [tenants, setTenants] = useState<Tenant[]>([]); // Restore tenants state
+
     const { register, handleSubmit, watch, setValue, getValues, formState: { errors } } = useForm({
         defaultValues: {
             tenantId: '',
             month: new Date().toISOString().slice(0, 7), // YYYY-MM
-            previousReading: 0,
-            currentReading: 0,
             electricityUsage: 0,
             electricityRate: 0,
             electricityAmount: 0,
@@ -65,8 +65,6 @@ export default function GenerateBillPage() {
     const {
         tenantId,
         month,
-        currentReading,
-        previousReading,
         isPartialRent,
         daysOccupied,
         rentAmount,
@@ -163,13 +161,22 @@ export default function GenerateBillPage() {
         }
     };
 
-    // Calculate usage when readings change
-    useEffect(() => {
-        if (currentReading && previousReading) {
-            const usage = Math.max(0, Number(currentReading) - Number(previousReading));
-            setValue('electricityUsage', usage);
-        }
-    }, [currentReading, previousReading, setValue]);
+    // Handle Room Reading Changes
+    const handleRoomReadingChange = (index: number, value: string) => {
+        const val = parseFloat(value) || 0;
+        const newReadings = [...roomReadings];
+        newReadings[index].currentReading = val;
+
+        // Calculate usage for this room
+        const usage = Math.max(0, val - (newReadings[index].previousReading || 0));
+        newReadings[index].usage = usage;
+
+        setRoomReadings(newReadings);
+
+        // Update Total Usage
+        const totalUsage = newReadings.reduce((sum, r) => sum + (r.usage || 0), 0);
+        setValue('electricityUsage', totalUsage);
+    };
 
     // Calculate electricity amount when usage or rate changes
     const electricityUsageVal = watch('electricityUsage');
@@ -205,7 +212,7 @@ export default function GenerateBillPage() {
         setValue('totalAmount', total);
     }, [rentAmount, waterCharge, electricityAmount, previousDues, setValue]);
 
-    const fetchBillDetails = async (usageOverride?: number, currentReadingOverride?: number) => {
+    const fetchBillDetails = async (usageOverride?: number) => {
         if (!tenantId || !month) return;
 
         setCalculating(true);
@@ -216,8 +223,6 @@ export default function GenerateBillPage() {
 
             if (usageOverride !== undefined) {
                 url += `&usage=${usageOverride}`;
-            } else if (currentReadingOverride !== undefined) {
-                url += `&currentReading=${currentReadingOverride}`;
             }
 
             const res = await fetch(url);
@@ -233,11 +238,8 @@ export default function GenerateBillPage() {
             setValue('previousDues', data.previousDues);
             setValue('electricityUsage', data.electricityUsage);
 
-            if (data.previousReading !== undefined) {
-                setValue('previousReading', data.previousReading);
-            }
-            if (data.currentReading !== undefined && usageOverride === undefined && currentReadingOverride === undefined) {
-                setValue('currentReading', data.currentReading);
+            if (data.roomDetails) {
+                setRoomReadings(data.roomDetails);
             }
 
         } catch (err: any) {
@@ -248,14 +250,20 @@ export default function GenerateBillPage() {
     };
 
     const handleCalculateClick = () => {
-        // When clicking calculate, we use the value currently in the input
-        fetchBillDetails(undefined, Number(currentReading));
+        // Recalculate based on current local state inputs
+        // Just trigger the effect logic essentially, which is automatic on input change
+        // But maybe we want to re-fetch defaults? Usually 'Calculate' implies processing.
+        // For now, it's mostly visual or "Refresh".
+        fetchBillDetails();
     };
 
     const onFormSubmit = (data: any) => {
-        // Validation for negative usage
-        if (Number(data.currentReading) < Number(data.previousReading) && Number(data.currentReading) !== 0) {
-            // Basic warning could go here
+        // Validation for negative usage check per room
+        const hasNegativeUsage = roomReadings.some(r => (r.currentReading || 0) < (r.previousReading || 0));
+
+        if (hasNegativeUsage) {
+            // Basic warning or confirm? For now, we allow but maybe warn.
+            // setError('Warning: One or more rooms have negative usage.');
         }
 
         // Instead of API call, show Payment Modal
@@ -283,9 +291,12 @@ export default function GenerateBillPage() {
                 propertyId: tenant.propertyId,
                 month,
                 year,
-                startUnits: Number(pendingFormData.previousReading),
-                endUnits: Number(pendingFormData.currentReading),
-                unitsConsumed: Number(pendingFormData.electricityUsage),
+                roomReadings: roomReadings.map(r => ({
+                    roomId: r.roomId,
+                    startUnits: Number(r.previousReading),
+                    endUnits: Number(r.currentReading),
+                    unitsConsumed: Number(r.usage)
+                })),
                 rentAmount: Number(pendingFormData.rentAmount),
                 waterCharge: Number(pendingFormData.waterCharge),
                 dueDate: pendingFormData.dueDate,
@@ -357,28 +368,40 @@ export default function GenerateBillPage() {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div>
-                            <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Previous Reading</label>
-                            <input
-                                type="number"
-                                {...register('previousReading')}
-                                readOnly
-                                className="w-full p-3 rounded-lg bg-gray-100 dark:bg-zinc-800 border-none font-medium text-gray-600 dark:text-gray-400"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">Auto-fetched</p>
+                    {/* Room Readings Section */}
+                    {roomReadings.length > 0 && (
+                        <div className="space-y-4">
+                            <h3 className="font-semibold text-gray-700 dark:text-gray-300">Meter Readings</h3>
+                            {roomReadings.map((room, index) => (
+                                <div key={room.roomId} className="grid grid-cols-1 md:grid-cols-3 gap-6 p-4 bg-gray-50 dark:bg-zinc-900/30 rounded-lg border border-gray-100 dark:border-gray-800">
+                                    <div className="flex items-center">
+                                        <span className="font-medium text-gray-900 dark:text-white">Room {room.roomNumber}</span>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium mb-1 text-gray-500">Previous Reading</label>
+                                        <input
+                                            type="number"
+                                            value={room.previousReading}
+                                            readOnly
+                                            className="w-full p-2 rounded-lg bg-gray-100 dark:bg-zinc-800 border-none text-gray-600 dark:text-gray-400 text-sm"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium mb-1 text-primary">Current Reading</label>
+                                        <input
+                                            type="number"
+                                            value={room.currentReading}
+                                            onChange={(e) => handleRoomReadingChange(index, e.target.value)}
+                                            className="w-full p-2 rounded-lg bg-white dark:bg-zinc-900 border border-gray-300 dark:border-gray-700 focus:ring-1 focus:ring-primary focus:outline-none text-sm font-bold"
+                                            placeholder="Enter reading"
+                                        />
+                                    </div>
+                                </div>
+                            ))}
                         </div>
+                    )}
 
-                        <div>
-                            <label className="block text-sm font-medium mb-1 text-primary font-bold">Current Reading *</label>
-                            <input
-                                type="number"
-                                {...register('currentReading', { required: true, min: 0 })}
-                                className="w-full p-3 rounded-lg bg-white dark:bg-zinc-900 border-2 border-primary/50 focus:border-primary focus:ring-0 focus:outline-none font-bold"
-                                placeholder="Enter reading"
-                            />
-                        </div>
-
+                    <div className="grid grid-cols-1 gap-6">
                         <div className="flex items-end">
                             <button
                                 type="button"
@@ -387,7 +410,7 @@ export default function GenerateBillPage() {
                                 className="w-full py-3 px-4 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                             >
                                 {calculating ? <RefreshCw className="animate-spin h-4 w-4" /> : <Calculator className="h-4 w-4" />}
-                                Calculate Bill
+                                Recalculate Bill
                             </button>
                         </div>
                     </div>
@@ -499,7 +522,7 @@ export default function GenerateBillPage() {
 
                         <button
                             type="submit"
-                            disabled={loading || !tenantId || !currentReading}
+                            disabled={loading || !tenantId || roomReadings.length === 0}
                             className="w-full mt-6 py-4 px-4 bg-primary hover:bg-orange-600 text-white font-bold text-lg rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {loading ? 'Processing...' : 'Collect Payment'}

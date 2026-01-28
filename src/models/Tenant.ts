@@ -24,16 +24,22 @@ const TenantSchema = new mongoose.Schema({
     roomId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Room',
-        required: true,
+        required: false, // Made optional
         index: true
     },
+    rooms: [{
+        roomId: { type: mongoose.Schema.Types.ObjectId, ref: 'Room', required: true },
+        roomNumber: { type: String, required: true },
+        baseRent: { type: Number, default: 0 },
+        meterReadingStart: { type: Number, default: 0 }
+    }],
     fullName: {
         type: String,
         required: true
     },
     roomNumber: {
         type: String,
-        required: true
+        required: false // Made optional
     },
     phoneNumber: {
         type: String,
@@ -43,7 +49,7 @@ const TenantSchema = new mongoose.Schema({
     email: { type: String },
     baseRent: {
         type: Number,
-        required: true
+        required: false // Made optional
     },
     idProofs: [IdProofSchema],
     startDate: {
@@ -63,7 +69,7 @@ const TenantSchema = new mongoose.Schema({
     meterReadingStart: {
         type: Number,
         default: 0
-    },
+    }, // Deprecated, use rooms array
 }, { timestamps: true });
 
 // Compound indexes for efficient queries

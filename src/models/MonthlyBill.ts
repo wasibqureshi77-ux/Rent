@@ -43,12 +43,24 @@ const MonthlyBillSchema = new mongoose.Schema({
         required: true
     },
 
-    // Meter readings
+    // Meter readings (Legacy - Single Room)
     meter: {
-        startUnits: { type: Number, required: true, default: 0 },
-        endUnits: { type: Number, required: true, default: 0 },
-        unitsConsumed: { type: Number, required: true, default: 0 }
+        startUnits: { type: Number, default: 0 },
+        endUnits: { type: Number, default: 0 },
+        unitsConsumed: { type: Number, default: 0 }
     },
+
+    // New: Multiple Rooms Support
+    roomDetails: [{
+        roomId: { type: mongoose.Schema.Types.ObjectId, ref: 'Room' },
+        roomNumber: String,
+        rentAmount: Number,
+        meter: {
+            startUnits: Number,
+            endUnits: Number,
+            unitsConsumed: Number
+        }
+    }],
 
     // Amounts
     amounts: {

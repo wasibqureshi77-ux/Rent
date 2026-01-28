@@ -79,7 +79,7 @@ export async function runMonthlyBillingSummary(
             const property = t.propertyId as any;
             return {
                 fullName: t.fullName,
-                roomNumber: t.roomNumber,
+                roomNumber: t.roomNumber || (t.rooms?.map((r: any) => r.roomNumber).join(', ')) || 'N/A',
                 propertyName: property?.name
             };
         });

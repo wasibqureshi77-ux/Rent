@@ -129,20 +129,61 @@ export default async function BillDetailsPage({ params }: { params: Promise<{ id
 
                 <div className="mb-8 p-4 bg-gray-50 dark:bg-zinc-800/50 rounded-lg">
                     <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Electricity Meter Reading</h4>
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                        <div>
-                            <p className="text-xs text-gray-500 uppercase">Previous</p>
-                            <p className="font-mono font-medium text-lg">{b.meter?.startUnits ?? 0}</p>
+
+                    {b.roomDetails && b.roomDetails.length > 0 ? (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                                <thead className="text-xs text-gray-500 uppercase bg-gray-100 dark:bg-zinc-800">
+                                    <tr>
+                                        <th className="px-3 py-2">Room</th>
+                                        <th className="px-3 py-2 text-right">Rent</th>
+                                        <th className="px-3 py-2 text-center">Prev</th>
+                                        <th className="px-3 py-2 text-center">Curr</th>
+                                        <th className="px-3 py-2 text-right">Usage</th>
+                                        <th className="px-3 py-2 text-right">Amt (Est)</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                    {b.roomDetails.map((room: any, idx: number) => (
+                                        <tr key={idx}>
+                                            <td className="px-3 py-2 font-medium">{room.roomNumber}</td>
+                                            <td className="px-3 py-2 text-right">₹{room.rentAmount}</td>
+                                            <td className="px-3 py-2 text-center">{room.meter?.startUnits}</td>
+                                            <td className="px-3 py-2 text-center">{room.meter?.endUnits}</td>
+                                            <td className="px-3 py-2 text-right">{room.meter?.unitsConsumed}</td>
+                                            <td className="px-3 py-2 text-right">
+                                                ₹{((room.meter?.unitsConsumed || 0) * (b.amounts?.ratePerUnit || 0)).toFixed(0)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                                <tfoot className="border-t border-gray-300 dark:border-gray-600 font-semibold">
+                                    <tr>
+                                        <td className="px-3 py-2">Total</td>
+                                        <td className="px-3 py-2 text-right">₹{b.amounts?.rentAmount}</td>
+                                        <td colSpan={2}></td>
+                                        <td className="px-3 py-2 text-right">{b.meter?.unitsConsumed}</td>
+                                        <td className="px-3 py-2 text-right">₹{b.amounts?.electricityAmount}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
                         </div>
-                        <div>
-                            <p className="text-xs text-gray-500 uppercase">Current</p>
-                            <p className="font-mono font-medium text-lg">{b.meter?.endUnits ?? 0}</p>
+                    ) : (
+                        <div className="grid grid-cols-3 gap-4 text-center">
+                            <div>
+                                <p className="text-xs text-gray-500 uppercase">Previous</p>
+                                <p className="font-mono font-medium text-lg">{b.meter?.startUnits ?? 0}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500 uppercase">Current</p>
+                                <p className="font-mono font-medium text-lg">{b.meter?.endUnits ?? 0}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500 uppercase">Consumed</p>
+                                <p className="font-mono font-bold text-lg text-primary">{b.meter?.unitsConsumed ?? 0} Units</p>
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-xs text-gray-500 uppercase">Consumed</p>
-                            <p className="font-mono font-bold text-lg text-primary">{b.meter?.unitsConsumed ?? 0} Units</p>
-                        </div>
-                    </div>
+                    )}
                 </div>
 
                 <table className="w-full mb-8">
